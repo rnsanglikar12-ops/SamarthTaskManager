@@ -109,13 +109,17 @@ export const Header: React.FC<HeaderProps> = ({
     : 'All Departments (Executive View)';
 
   const handleSync = async () => {
+    if (isSyncing) return;
     setIsSyncing(true);
-    if (onSyncSheet) {
-      await onSyncSheet();
+    try {
+      if (onSyncSheet) {
+        await onSyncSheet();
+      }
+      setSyncToast(`Cloud Synced: Central matrix up to date`);
+      setTimeout(() => setSyncToast(null), 3000);
+    } finally {
+      setIsSyncing(false);
     }
-    setIsSyncing(false);
-    setSyncToast(`Cloud Synced: Central matrix up to date`);
-    setTimeout(() => setSyncToast(null), 3000);
   };
 
   const navTabs: { id: NavTab; label: string; icon: React.ElementType; badge: string; color: TabColor }[] = [

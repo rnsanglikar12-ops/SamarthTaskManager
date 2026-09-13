@@ -7,7 +7,8 @@ import {
   UserPlus,
   Trash2,
   KeyRound,
-  Users as UsersIcon
+  Users as UsersIcon,
+  Loader2
 } from 'lucide-react';
 import { Role, hashPassword } from '../utils/auth';
 import {
@@ -40,6 +41,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  // Tracks which user row has a reset-password or delete request in flight,
+  // so both of that row's buttons disable and a spinner shows — prevents a
+  // double-click from firing a duplicate request.
+  const [busyUser, setBusyUser] = useState<{ username: string; action: 'reset' | 'delete' } | null>(null);
 
   const [newUsername, setNewUsername] = useState('');
   const [newDisplayName, setNewDisplayName] = useState('');
@@ -75,7 +81,9 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       setErrorMsg('Username, display name, and a temp password (min. 4 characters) are required.');
       return;
     }
+    if (isCreating) return;
 
+    setIsCreating(true);
     try {
       const passwordHash = await hashPassword(newTempPassword.trim());
       const success = await createUser({
@@ -98,15 +106,19 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       loadUsers();
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to create user.');
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleResetPassword = async (username: string) => {
+    if (busyUser) return;
     const tempPassword = window.prompt(`Enter a new temporary password for "${username}":`);
     if (!tempPassword || tempPassword.trim().length < 4) {
       if (tempPassword !== null) setErrorMsg('Password must be at least 4 characters long.');
       return;
     }
+    setBusyUser({ username, action: 'reset' });
     try {
       const passwordHash = await hashPassword(tempPassword.trim());
       const success = await changePassword(username, passwordHash, true);
@@ -119,15 +131,19 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       loadUsers();
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to reset password.');
+    } finally {
+      setBusyUser(null);
     }
   };
 
   const handleDeleteUser = async (username: string) => {
+    if (busyUser) return;
     if (username === currentUsername) {
       setErrorMsg('You cannot delete your own account while signed in.');
       return;
     }
     if (!window.confirm(`Remove user "${username}"? This cannot be undone.`)) return;
+    setBusyUser({ username, action: 'delete' });
     try {
       const success = await deleteUser(username);
       if (!success) {
@@ -139,6 +155,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       loadUsers();
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to remove user.');
+    } finally {
+      setBusyUser(null);
     }
   };
 
@@ -246,9 +264,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </div>
               <button
                 type="submit"
-                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-2xs"
+                disabled={isCreating}
+                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-2xs flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Create User
+                {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isCreating ? 'Creating...' : 'Create User'}</span>
               </button>
             </form>
           )}
@@ -276,18 +296,28 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleResetPassword(u.username)}
+                    disabled={busyUser?.username === u.username}
                     title="Reset password"
-                    className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <KeyRound className="w-3.5 h-3.5" />
+                    {busyUser?.username === u.username && busyUser.action === 'reset' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <KeyRound className="w-3.5 h-3.5" />
+                    )}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDeleteUser(u.username)}
+                    disabled={busyUser?.username === u.username}
                     title="Remove user"
-                    className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {busyUser?.username === u.username && busyUser.action === 'delete' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
                   </button>
                 </div>
               </div>

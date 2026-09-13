@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { ActionItem, ActionStatus, Priority } from '../types';
-import { 
-  X, 
-  CheckCircle2, 
-  Sparkles, 
-  Camera, 
-  Save, 
-  Trash2, 
+import {
+  X,
+  CheckCircle2,
+  Sparkles,
+  Camera,
+  Save,
+  Trash2,
   AlertTriangle,
   Image as ImageIcon,
   Send,
   RotateCcw,
   ShieldCheck,
   Check,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
 import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
@@ -21,8 +22,8 @@ import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
 interface ActionDetailModalProps {
   action: ActionItem | null;
   onClose: () => void;
-  onSave: (updated: ActionItem) => void;
-  onDelete?: (id: string) => void;
+  onSave: (updated: ActionItem) => Promise<boolean>;
+  onDelete?: (id: string) => Promise<boolean>;
   currentDept?: string;
   session: AuthUser | null;
 }
@@ -56,6 +57,12 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const [reworkReason, setReworkReason] = useState('');
   const [handshakeNotice, setHandshakeNotice] = useState<string | null>(null);
 
+  // Tracks which footer/verification action is mid-flight so its button can
+  // show a spinner and every action button can be disabled — prevents a
+  // double-click from firing a duplicate save/delete request.
+  const [pendingAction, setPendingAction] = useState<null | 'save' | 'resolve' | 'verify' | 'rework' | 'delete'>(null);
+  const isBusy = pendingAction !== null;
+
   // Role permissions
   const hasReviseAuthority = can(session, 'reviseDeadline');
   const hasDeleteAuthority = can(session, 'deleteTask');
@@ -70,15 +77,18 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const isOriginator = isExecutive || (!!currentDept && currentDept.toLowerCase() === originatorDept.toLowerCase());
   const isTargetDept = !isExecutive && !!currentDept && currentDept.toLowerCase() === action.dept.toLowerCase();
 
-  const handleConfirmPermanentDelete = () => {
-    if (onDelete) {
-      onDelete(action.id);
-    }
-    onClose();
+  const handleConfirmPermanentDelete = async () => {
+    if (!onDelete || isBusy) return;
+    setPendingAction('delete');
+    const ok = await onDelete(action.id);
+    setPendingAction(null);
+    if (ok) onClose();
   };
 
-  const handleSave = () => {
-    onSave({
+  const handleSave = async () => {
+    if (isBusy) return;
+    setPendingAction('save');
+    const ok = await onSave({
       ...action,
       status,
       actionNotes,
@@ -90,17 +100,20 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined
     });
-    onClose();
+    setPendingAction(null);
+    if (ok) onClose();
   };
 
   // Standard task completion (for non-handshake tasks, or originator sign-off)
-  const handleMarkResolved = () => {
+  const handleMarkResolved = async () => {
+    if (isBusy) return;
+    setPendingAction('resolve');
     const todayStr = new Date().toLocaleDateString('en-GB');
     const stamp = isHandshake
       ? `[Verified & Completed by Originator (${originatorDept}) on ${todayStr}]`
       : `[Resolved on ${todayStr}]`;
 
-    onSave({
+    const ok = await onSave({
       ...action,
       status: 'Completed',
       actionNotes: actionNotes ? `${actionNotes} | ${stamp}` : stamp,
@@ -112,15 +125,18 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined
     });
-    onClose();
+    setPendingAction(null);
+    if (ok) onClose();
   };
 
   // Handshake: Target Department submits work for Originator Verification
-  const handleSubmitForVerification = () => {
+  const handleSubmitForVerification = async () => {
+    if (isBusy) return;
+    setPendingAction('verify');
     const todayStr = new Date().toLocaleDateString('en-GB');
     const stamp = `[Work submitted for Originator Verification by ${action.dept} on ${todayStr}]`;
-    
-    onSave({
+
+    const ok = await onSave({
       ...action,
       status: 'Under Verification',
       actionNotes: actionNotes ? `${actionNotes} | ${stamp}` : stamp,
@@ -132,20 +148,23 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined
     });
-    onClose();
+    setPendingAction(null);
+    if (ok) onClose();
   };
 
   // Handshake: Originator rejects and requests rework
-  const handleRequestRework = () => {
+  const handleRequestRework = async () => {
     if (!reworkReason.trim()) {
       setHandshakeNotice('Please provide specific feedback/reason for rework.');
       return;
     }
+    if (isBusy) return;
+    setPendingAction('rework');
 
     const todayStr = new Date().toLocaleDateString('en-GB');
     const stamp = `[Rework requested by Originator (${originatorDept}) on ${todayStr}: ${reworkReason.trim()}]`;
 
-    onSave({
+    const ok = await onSave({
       ...action,
       status: 'In process',
       actionNotes: actionNotes ? `${actionNotes} | ${stamp}` : stamp,
@@ -157,7 +176,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined
     });
-    onClose();
+    setPendingAction(null);
+    if (ok) onClose();
   };
 
   const handleStatusChange = (newStatus: ActionStatus) => {
@@ -304,15 +324,21 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                           <button
                             type="button"
                             onClick={handleMarkResolved}
-                            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-2xs transition-colors"
+                            disabled={isBusy}
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-2xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Approve & Mark Completed</span>
+                            {pendingAction === 'resolve' ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            )}
+                            <span>{pendingAction === 'resolve' ? 'Saving...' : 'Approve & Mark Completed'}</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setShowReworkInput(true)}
-                            className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 rounded-lg font-semibold text-xs transition-colors"
+                            disabled={isBusy}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 rounded-lg font-semibold text-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
                             <span>Request Rework</span>
@@ -328,16 +354,19 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                             value={reworkReason}
                             onChange={(e) => setReworkReason(e.target.value)}
                             placeholder="Describe what is incomplete or defective..."
-                            className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded text-xs outline-none font-sans"
+                            disabled={isBusy}
+                            className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded text-xs outline-none font-sans disabled:opacity-60"
                             autoFocus
                           />
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
                               onClick={handleRequestRework}
-                              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold"
+                              disabled={isBusy}
+                              className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                              Send Back for Rework
+                              {pendingAction === 'rework' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                              <span>{pendingAction === 'rework' ? 'Sending...' : 'Send Back for Rework'}</span>
                             </button>
                             <button
                               type="button"
@@ -345,7 +374,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                 setShowReworkInput(false);
                                 setReworkReason('');
                               }}
-                              className="px-2.5 py-1 bg-white border border-slate-300 text-slate-600 rounded text-xs font-semibold"
+                              disabled={isBusy}
+                              className="px-2.5 py-1 bg-white border border-slate-300 text-slate-600 rounded text-xs font-semibold disabled:opacity-60"
                             >
                               Cancel
                             </button>
@@ -387,15 +417,21 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={handleConfirmPermanentDelete}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                  disabled={isBusy}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Yes, Permanently Delete Task</span>
+                  {pendingAction === 'delete' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>{pendingAction === 'delete' ? 'Deleting...' : 'Yes, Permanently Delete Task'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="px-3.5 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold shadow-2xs"
+                  disabled={isBusy}
+                  className="px-3.5 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold shadow-2xs disabled:opacity-60"
                 >
                   Cancel
                 </button>
@@ -621,10 +657,15 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={handleMarkResolved}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                    disabled={isBusy}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                    <span>Originator Approve & Complete</span>
+                    {pendingAction === 'resolve' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                    )}
+                    <span>{pendingAction === 'resolve' ? 'Saving...' : 'Originator Approve & Complete'}</span>
                   </button>
                 )
               ) : (
@@ -642,11 +683,16 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     <button
                       type="button"
                       onClick={handleSubmitForVerification}
-                      className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                      disabled={isBusy}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                       title={`Submit work to ${originatorDept} for verification`}
                     >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Submit to {originatorDept} for Verification</span>
+                      {pendingAction === 'verify' ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>{pendingAction === 'verify' ? 'Submitting...' : `Submit to ${originatorDept} for Verification`}</span>
                     </button>
                   )
                 )
@@ -657,10 +703,15 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={handleMarkResolved}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                  disabled={isBusy}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                  <span>Mark Completed</span>
+                  {pendingAction === 'resolve' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  )}
+                  <span>{pendingAction === 'resolve' ? 'Saving...' : 'Mark Completed'}</span>
                 </button>
               )
             ))}
@@ -670,7 +721,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100/80 rounded-xl border border-red-200 transition-colors text-xs font-bold shadow-2xs"
+                disabled={isBusy}
+                className="flex items-center gap-1.5 px-3 py-2 text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100/80 rounded-xl border border-red-200 transition-colors text-xs font-bold shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                 title="Permanently Delete Task (Authorized Executive Access)"
               >
                 <Trash2 className="w-4 h-4" />
@@ -683,7 +735,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-slate-800 rounded-xl text-xs font-semibold hover:bg-slate-100 transition-colors shadow-2xs"
+              disabled={isBusy}
+              className="px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:text-slate-800 rounded-xl text-xs font-semibold hover:bg-slate-100 transition-colors shadow-2xs disabled:opacity-60"
             >
               Cancel
             </button>
@@ -691,10 +744,15 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#1d64ec] hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+                disabled={isBusy}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#1d64ec] hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Save className="w-4 h-4 stroke-[2.5]" />
-                <span>Save Updates</span>
+                {pendingAction === 'save' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 stroke-[2.5]" />
+                )}
+                <span>{pendingAction === 'save' ? 'Saving...' : 'Save Updates'}</span>
               </button>
             )}
           </div>

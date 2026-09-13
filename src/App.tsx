@@ -253,11 +253,11 @@ export default function App() {
   }, [visibleActions]);
 
   // Update status directly & sync across links
-  const handleUpdateStatus = useCallback((id: string, newStatus: ActionStatus) => {
+  const handleUpdateStatus = useCallback(async (id: string, newStatus: ActionStatus): Promise<boolean> => {
     const target = actions.find(a => a.id === id);
     if (!target || !can(session, 'editOwnDept', target)) {
       showToast('Access denied: you do not have permission to update this task.');
-      return;
+      return false;
     }
     let updatedItem: ActionItem | null = null;
     setActions(prev => {
@@ -274,17 +274,29 @@ export default function App() {
     if (updatedItem) {
       broadcastLocalUpdate('UPDATE', updatedItem);
       if (isGoogleSheetConnected()) {
-        updateActionInGoogleSheet(updatedItem);
+        const ok = await updateActionInGoogleSheet(updatedItem);
+        if (!ok) {
+          showToast(`Task #${id} updated locally but failed to sync — please retry.`);
+          return false;
+        }
       }
     }
     showToast(`Task #${id} status changed to "${newStatus}" & synced`);
+    return true;
   }, [actions, session, showToast]);
 
   // Delete item (Plant Head / MD / Admin authority only) & sync across links
-  const handleDeleteAction = useCallback((id: string) => {
+  const handleDeleteAction = useCallback(async (id: string): Promise<boolean> => {
     if (!can(session, 'deleteTask')) {
       showToast('Access denied: you do not have permission to delete tasks.');
-      return;
+      return false;
+    }
+    if (isGoogleSheetConnected()) {
+      const ok = await deleteActionInGoogleSheet(id);
+      if (!ok) {
+        showToast(`Failed to delete Task #${id} — Google Sheet sync error. Please try again.`);
+        return false;
+      }
     }
     setActions(prev => {
       const next = prev.filter(item => item.id !== id);
@@ -293,17 +305,22 @@ export default function App() {
     });
     setSelectedAction(null);
     broadcastLocalUpdate('DELETE', { id });
-    if (isGoogleSheetConnected()) {
-      deleteActionInGoogleSheet(id);
-    }
     showToast(`Task #${id} permanently deleted`);
+    return true;
   }, [session, showToast]);
 
   // Save full edited action & sync across links
-  const handleSaveAction = useCallback((updated: ActionItem) => {
+  const handleSaveAction = useCallback(async (updated: ActionItem): Promise<boolean> => {
     if (!can(session, 'editOwnDept', updated)) {
       showToast('Access denied: you do not have permission to edit this task.');
-      return;
+      return false;
+    }
+    if (isGoogleSheetConnected()) {
+      const ok = await updateActionInGoogleSheet(updated);
+      if (!ok) {
+        showToast(`Failed to save Task #${updated.id} — Google Sheet sync error. Please try again.`);
+        return false;
+      }
     }
     setActions(prev => {
       const next = prev.map(item => item.id === updated.id ? updated : item);
@@ -311,10 +328,8 @@ export default function App() {
       return next;
     });
     broadcastLocalUpdate('UPDATE', updated);
-    if (isGoogleSheetConnected()) {
-      updateActionInGoogleSheet(updated);
-    }
     showToast(`Task #${updated.id} successfully updated & synced across links`);
+    return true;
   }, [session, showToast]);
 
   // Add new item & sync across links. ID is assigned server-side (atomic,
