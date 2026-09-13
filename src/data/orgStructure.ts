@@ -106,3 +106,25 @@ export const SAMARTH_ORG_STRUCTURE: DepartmentStructure[] = [
 ];
 
 export const MENTOR_NAME = 'Mr. Sanglikar (Mentor)';
+
+// Departments that can be a task's "Responsible Department" (MD is plant-wide
+// oversight and does not execute tasks itself).
+export const TASK_DEPARTMENTS = SAMARTH_ORG_STRUCTURE
+  .filter((d) => d.deptName !== 'MD')
+  .map((d) => d.deptName);
+
+// Every department gets a placeholder assignee so a task can always be
+// created for a department even when the specific responsible person isn't
+// known yet (e.g. a DeptHead raising a CFT handshake task to another dept).
+export function getDefaultAssignee(deptName: string): string {
+  return `${deptName} Default`;
+}
+
+// Assignees scoped to a single department: the default placeholder first
+// (so it's the natural pre-selected choice), then the dept head and
+// supervisors. Falls back to just the placeholder for unknown departments.
+export function getAssigneesForDept(deptName: string): string[] {
+  const entry = SAMARTH_ORG_STRUCTURE.find((d) => d.deptName === deptName);
+  const names = entry ? [entry.deptHead, ...entry.supervisors] : [];
+  return [getDefaultAssignee(deptName), ...Array.from(new Set(names.filter(Boolean)))];
+}

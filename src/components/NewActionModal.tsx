@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ActionItem, Priority, Recurrence } from '../types';
-import { SAMARTH_PLANT_ASSIGNEES } from '../data/sentinelDataLoader';
+import { TASK_DEPARTMENTS, getAssigneesForDept, getDefaultAssignee } from '../data/orgStructure';
 import {
   X,
   Plus,
@@ -32,42 +32,41 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [desc, setDesc] = useState('');
   const [originTrigger, setOriginTrigger] = useState('💡 General Kaizen (Continuous Improvement)');
-  const [originator, setOriginator] = useState('👔 Plant Head (Awari B.)');
   const [isBroadcast, setIsBroadcast] = useState(false);
   const [priority, setPriority] = useState<Priority>('B');
   const [recurrenceOption, setRecurrenceOption] = useState<string>('One-Time Action');
   const [machineEqNo, setMachineEqNo] = useState('PDC-02');
   const [targetDeadline, setTargetDeadline] = useState('2026-09-18');
+  // Responsible (executing) department — freely selectable even for a
+  // DeptHead, so they can raise a CFT Handshake task to another department.
+  // Defaults to the signed-in user's own department.
   const [dept, setDept] = useState(lockedDept || 'Quality');
-  const [owner, setOwner] = useState(SAMARTH_PLANT_ASSIGNEES[0] || 'Awari B');
+  // Originating department — who raised the task. Locked to the signed-in
+  // DeptHead's own department (that's what makes dept !== originatorDept a
+  // real CFT handshake); free for plant-wide roles, defaulting to "no
+  // handshake" (same as the responsible department) unless changed.
+  const [originatorDept, setOriginatorDept] = useState(lockedDept || 'Quality');
+  const [owner, setOwner] = useState(getDefaultAssignee(lockedDept || 'Quality'));
   const [problemPhoto, setProblemPhoto] = useState<string>('');
 
-  // Department-scoped users (DeptHead) can only create tasks for their own department.
+  // Department-scoped users (DeptHead) always raise tasks as their own
+  // department, but may target any department's responsible team.
   useEffect(() => {
     if (lockedDept) {
-      setDept(lockedDept);
+      setOriginatorDept(lockedDept);
       setIsBroadcast(false);
     }
   }, [lockedDept]);
 
-  const departments = [
-    'Quality',
-    'Store',
-    'PDC',
-    'Die Maint',
-    'SPM',
-    'Fettling',
-    'Machine shop-01',
-    'Machine shop-02',
-    'PPC',
-    'MC Maint',
-    'NPD',
-    'Tool Room',
-    'HR',
-    'Account',
-    'Purchase',
-    'Plant Head'
-  ];
+  // The assignee pool is scoped to whichever department is responsible for
+  // executing the task; each department has a default placeholder assignee
+  // so an owner is always pre-selected even before a specific person is known.
+  useEffect(() => {
+    setOwner(getDefaultAssignee(dept));
+  }, [dept]);
+
+  const departments = TASK_DEPARTMENTS;
+  const assigneeOptions = getAssigneesForDept(dept);
 
   // Helper to calculate Next Saturday
   const handleSetNextSaturday = () => {
@@ -103,7 +102,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     const isKaizen = originTrigger.includes('Kaizen');
 
     const effectiveBroadcast = isBroadcast && !lockedDept;
-    const effectiveDept = lockedDept || dept;
+    const effectiveDept = dept;
 
     setIsSubmitting(true);
     const success = await onAdd({
@@ -111,14 +110,14 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       recurrence: normalizedRecurrence,
       dept: effectiveBroadcast ? 'All Departments' : effectiveDept,
       desc: isKaizen && !desc.includes('[DSI Kaizen]') ? `⭐ [DSI Kaizen] ${desc}` : desc,
-      owner: effectiveBroadcast ? 'All Department Leads' : (owner || 'Awari B'),
+      owner: effectiveBroadcast ? 'All Department Leads' : (owner || getDefaultAssignee(dept)),
       deadline: targetDeadline || '2026-09-18',
       evidence: 'Photo Proof',
       status: 'Pending',
       actionNotes: machineEqNo ? `M/C: ${machineEqNo}` : '',
       attachedPhoto: problemPhoto || undefined,
       timestamp: new Date().toISOString(),
-      originatorDept: originator.replace('👔', '').trim(),
+      originatorDept: effectiveBroadcast ? (lockedDept || 'Plant Head') : originatorDept,
       isKaizen,
       isBroadcast,
       machineNote: machineEqNo || undefined
@@ -212,28 +211,24 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                Originator / Raised By
+                Originating Department
               </label>
-              <select
-                value={originator}
-                onChange={(e) => setOriginator(e.target.value)}
-                className="w-full py-2.5 px-3 bg-white border border-slate-300 rounded-xl font-medium text-slate-800 focus:border-blue-500 outline-none shadow-2xs"
-              >
-                <option value="👔 Plant Head (Awari B.)">👔 Plant Head (Awari B.)</option>
-                <option value="👔 Quality Lead (Shailesh T)">👔 Quality Lead (Shailesh T)</option>
-                <option value="👔 PDC Lead (Shrirang C.)">👔 PDC Lead (Shrirang C.)</option>
-                <option value="👔 PPC Lead (Ratan S)">👔 PPC Lead (Ratan S)</option>
-                <option value="👔 Machine Shop-01 Lead (Ibrahim S)">👔 Machine Shop-01 Lead (Ibrahim S)</option>
-                <option value="👔 Machine Shop-02 Lead (Sunil G)">👔 Machine Shop-02 Lead (Sunil G)</option>
-                <option value="👔 Maintenance Lead (Mohite R)">👔 Maintenance Lead (Mohite R)</option>
-                <option value="👔 Tool Room Lead (Ravindra N)">👔 Tool Room Lead (Ravindra N)</option>
-                <option value="👔 Store Lead (Dipak G)">👔 Store Lead (Dipak G)</option>
-                <option value="👔 Purchase Lead (Pankaj B)">👔 Purchase Lead (Pankaj B)</option>
-                <option value="👔 HR / Admin Lead (Poonam S)">👔 HR / Admin Lead (Poonam S)</option>
-                <option value="👔 Account Lead (Sushant D)">👔 Account Lead (Sushant D)</option>
-                <option value="👔 SPM / Fettling Lead (Shrirang C.)">👔 SPM / Fettling Lead (Shrirang C.)</option>
-                <option value="👔 NPD Lead (Ravindra N)">👔 NPD Lead (Ravindra N)</option>
-              </select>
+              {lockedDept ? (
+                <div className="w-full py-2.5 px-3 bg-amber-50 border border-amber-300 rounded-xl text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>{lockedDept} (You)</span>
+                </div>
+              ) : (
+                <select
+                  value={originatorDept}
+                  onChange={(e) => setOriginatorDept(e.target.value)}
+                  className="w-full py-2.5 px-3 bg-white border border-slate-300 rounded-xl font-medium text-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+                >
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
@@ -264,21 +259,19 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                 <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                   Responsible Department *
                 </label>
-                {lockedDept ? (
-                  <div className="w-full py-2 px-3 bg-amber-50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-amber-700" />
-                    <span>{lockedDept} (Locked)</span>
-                  </div>
-                ) : (
-                  <select
-                    value={dept}
-                    onChange={(e) => setDept(e.target.value)}
-                    className="w-full py-2 px-3 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 outline-none"
-                  >
-                    {departments.map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
+                <select
+                  value={dept}
+                  onChange={(e) => setDept(e.target.value)}
+                  className="w-full py-2 px-3 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 outline-none"
+                >
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                {dept !== originatorDept && (
+                  <p className="mt-1 text-[11px] font-semibold text-blue-700">
+                    🤝 CFT Handshake: raised by {originatorDept} to {dept}
+                  </p>
                 )}
               </div>
 
@@ -291,7 +284,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                   onChange={(e) => setOwner(e.target.value)}
                   className="w-full py-2 px-3 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 outline-none"
                 >
-                  {SAMARTH_PLANT_ASSIGNEES.map((o) => (
+                  {assigneeOptions.map((o) => (
                     <option key={o} value={o}>{o}</option>
                   ))}
                 </select>
