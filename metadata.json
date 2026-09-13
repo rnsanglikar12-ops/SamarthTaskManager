@@ -1,0 +1,7 @@
+{
+  "name": "Samarth Industries - Operational Excellence Platform",
+  "description": "Enterprise Operational Excellence, CAPA, DSI Kaizen, and Daily Work Management Platform for Samarth Industries.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

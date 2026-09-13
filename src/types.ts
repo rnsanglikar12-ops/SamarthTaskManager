@@ -1,0 +1,63 @@
+export type Priority = 'A' | 'B';
+export type Recurrence = 'One-Time' | 'Daily' | 'Weekly';
+export type ActionStatus = 'Pending' | 'In process' | 'Completed' | 'Under Verification' | 'Hold';
+
+export interface ActionItem {
+  id: number;
+  priority: Priority;
+  recurrence: Recurrence;
+  dept: string;
+  desc: string;
+  owner: string;
+  deadline: string;
+  evidence: string;
+  status: ActionStatus;
+  actionNotes: string;
+  attachedPhoto?: string;
+  timestamp: string;
+  originatorDept: string;
+  afterPhoto?: string;
+  isKaizen?: boolean;
+  kaizenBenefit?: string;
+  isBroadcast?: boolean;
+  category?: string;
+  isMOM?: boolean;
+  isCFT?: boolean;
+  machineNote?: string;
+}
+
+export interface DepartmentStructure {
+  srNo: number;
+  deptName: string;
+  deptHead: string;
+  supervisors: string[];
+}
+
+export interface FilterState {
+  search: string;
+  dept: string;
+  priority: string;
+  status: string;
+  owner: string;
+  recurrence: string;
+  originator: string;
+  onlyKaizen: boolean;
+  onlyOverdue: boolean;
+  onlyBroadcast: boolean;
+}
+
+export interface OperationalStats {
+  totalActions: number;
+  completed: number;
+  inProcess: number;
+  pending: number;
+  underVerification: number;
+  onHold: number;
+  criticalPriorityA: number;
+  standardPriorityB: number;
+  overdueCount: number;
+  complianceRate: number;
+  kaizenCount: number;
+}
+
+export type SentinelStats = OperationalStats;
