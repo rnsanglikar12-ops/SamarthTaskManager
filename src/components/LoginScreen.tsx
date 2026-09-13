@@ -38,11 +38,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         return;
       }
 
+      // Defensive fallback: if the deployed Apps Script hasn't been updated
+      // to the multi-department schema yet, it still returns the old singular
+      // `department` field instead of `departments`. Wrap it into a one-item
+      // array rather than silently treating every dept-scoped user as
+      // plant-wide (which is what `departments: undefined` would do).
+      const legacyDepartment = (result as any).department as string | null | undefined;
+      const departments = result.departments !== undefined
+        ? result.departments
+        : (legacyDepartment ? [legacyDepartment] : null);
+
       const user: AuthUser = {
         username: result.username,
         displayName: result.displayName,
         role: result.role as Role,
-        department: result.department,
+        departments,
         mustChangePassword: result.mustChangePassword
       };
 

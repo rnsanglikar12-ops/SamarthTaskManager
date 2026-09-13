@@ -18,16 +18,23 @@ interface NewActionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (newItem: Omit<ActionItem, 'id'>) => Promise<boolean>;
-  lockedDept?: string | null;
+  lockedDepts?: string[] | null;
 }
 
 export const NewActionModal: React.FC<NewActionModalProps> = ({
   isOpen,
   onClose,
   onAdd,
-  lockedDept = null
+  lockedDepts = null
 }) => {
   if (!isOpen) return null;
+
+  // One person can head multiple departments: a single dept stays a hard,
+  // non-interactive lock; more than one becomes a dropdown constrained to
+  // just their own departments (instead of every department in the plant).
+  const isDeptScoped = !!lockedDepts;
+  const isSingleDept = (lockedDepts?.length ?? 0) === 1;
+  const isMultiDept = (lockedDepts?.length ?? 0) > 1;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [desc, setDesc] = useState('');
@@ -39,24 +46,36 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   const [targetDeadline, setTargetDeadline] = useState('2026-09-18');
   // Responsible (executing) department — freely selectable even for a
   // DeptHead, so they can raise a CFT Handshake task to another department.
-  // Defaults to the signed-in user's own department.
-  const [dept, setDept] = useState(lockedDept || 'Quality');
+  // Defaults to the signed-in user's own (first) department.
+  const [dept, setDept] = useState(lockedDepts?.[0] || 'Quality');
   // Originating department — who raised the task. Locked to the signed-in
   // DeptHead's own department (that's what makes dept !== originatorDept a
-  // real CFT handshake); free for plant-wide roles, defaulting to "no
-  // handshake" (same as the responsible department) unless changed.
-  const [originatorDept, setOriginatorDept] = useState(lockedDept || 'Quality');
-  const [owner, setOwner] = useState(getDefaultAssignee(lockedDept || 'Quality'));
+  // real CFT handshake); if they head several, pick among just those; free
+  // for plant-wide roles, defaulting to "no handshake" (same as the
+  // responsible department) unless changed.
+  const [originatorDept, setOriginatorDept] = useState(lockedDepts?.[0] || 'Quality');
+  const [owner, setOwner] = useState(getDefaultAssignee(lockedDepts?.[0] || 'Quality'));
   const [problemPhoto, setProblemPhoto] = useState<string>('');
 
-  // Department-scoped users (DeptHead) always raise tasks as their own
-  // department, but may target any department's responsible team.
+  // Department-scoped users always raise tasks as one of their own
+  // departments, but may target any department's responsible team (and, like
+  // everyone else, may also broadcast plant-wide).
   useEffect(() => {
-    if (lockedDept) {
-      setOriginatorDept(lockedDept);
-      setIsBroadcast(false);
+    if (lockedDepts) {
+      setOriginatorDept(lockedDepts[0]);
     }
-  }, [lockedDept]);
+  }, [lockedDepts]);
+
+  // Plant-wide roles (PlantHead/MD/Admin) don't have an inherent "home"
+  // department, so Originating Department just tracks whatever Responsible
+  // Department is set to — it's a locked/derived value, not an independent
+  // picker. Letting it drift out of sync (e.g. left over from a previous
+  // selection) was creating accidental, confusing "handshake" tasks.
+  useEffect(() => {
+    if (!isDeptScoped) {
+      setOriginatorDept(dept);
+    }
+  }, [dept, isDeptScoped]);
 
   // The assignee pool is scoped to whichever department is responsible for
   // executing the task; each department has a default placeholder assignee
@@ -101,7 +120,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
 
     const isKaizen = originTrigger.includes('Kaizen');
 
-    const effectiveBroadcast = isBroadcast && !lockedDept;
+    const effectiveBroadcast = isBroadcast;
     const effectiveDept = dept;
 
     setIsSubmitting(true);
@@ -117,7 +136,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       actionNotes: machineEqNo ? `M/C: ${machineEqNo}` : '',
       attachedPhoto: problemPhoto || undefined,
       timestamp: new Date().toISOString(),
-      originatorDept: effectiveBroadcast ? (lockedDept || 'Plant Head') : originatorDept,
+      originatorDept: effectiveBroadcast ? (lockedDepts?.[0] || 'Plant Head') : originatorDept,
       isKaizen,
       isBroadcast,
       machineNote: machineEqNo || undefined
@@ -213,44 +232,51 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 Originating Department
               </label>
-              {lockedDept ? (
+              {isSingleDept ? (
                 <div className="w-full py-2.5 px-3 bg-amber-50 border border-amber-300 rounded-xl text-xs font-bold text-amber-950 flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-amber-700" />
-                  <span>{lockedDept} (You)</span>
+                  <span>{lockedDepts![0]} (You)</span>
                 </div>
-              ) : (
+              ) : isMultiDept ? (
                 <select
                   value={originatorDept}
                   onChange={(e) => setOriginatorDept(e.target.value)}
                   className="w-full py-2.5 px-3 bg-white border border-slate-300 rounded-xl font-medium text-slate-800 focus:border-blue-500 outline-none shadow-2xs"
                 >
-                  {departments.map((d) => (
+                  {lockedDepts!.map((d) => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
+              ) : (
+                <div
+                  className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 flex items-center gap-1.5"
+                  title="Plant-wide roles raise tasks as the responsible department itself — this always matches Responsible Department below."
+                >
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{dept} (Same as Responsible Dept)</span>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Broadcast Card (plant-wide roles only — department-locked users create within their own dept) */}
-          {!lockedDept && (
-            <div className="border border-slate-200 bg-white rounded-xl p-3 flex items-center justify-between shadow-2xs">
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isBroadcast}
-                  onChange={(e) => setIsBroadcast(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer border-slate-300"
-                />
-                <span className="font-bold text-xs text-slate-800">
-                  Broadcast across ALL 10 Departments
-                </span>
-              </label>
-              <span className="text-xs font-semibold text-slate-500">
-                Plant-Wide
+          {/* Broadcast Card — available to every role, including dept-scoped
+              users, so a DeptHead can also push a plant-wide notice. */}
+          <div className="border border-slate-200 bg-white rounded-xl p-3 flex items-center justify-between shadow-2xs">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isBroadcast}
+                onChange={(e) => setIsBroadcast(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer border-slate-300"
+              />
+              <span className="font-bold text-xs text-slate-800">
+                Broadcast across ALL {TASK_DEPARTMENTS.length} Departments
               </span>
-            </div>
-          )}
+            </label>
+            <span className="text-xs font-semibold text-slate-500">
+              Plant-Wide
+            </span>
+          </div>
 
           {/* Target Department & Assignee (shown when not broadcast) */}
           {!isBroadcast && (

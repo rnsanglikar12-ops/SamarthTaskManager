@@ -7,6 +7,12 @@
  * keep older "*-fix.gs" files from previous rounds, they're superseded.
  *
  * WHAT CHANGED IN THIS VERSION:
+ * - Users can now be scoped to MULTIPLE departments (one person can head
+ *   several depts). The "department" column in the Users sheet now stores a
+ *   comma-separated list (e.g. "PDC,Die Maint,SPM,Fettling"); CREATE_USER/
+ *   UPDATE_USER accept a `departments` array, and every user record now
+ *   returns `departments: string[] | null` instead of a single `department`
+ *   string. Existing single-dept users keep working unchanged (a one-item list).
  * - Added CLEAR_ALL_TASKS: wipes all task rows (keeps headers) and resets
  *   IDCounters back to zero, for a clean-slate reset. Requires the client to
  *   send confirm: "DELETE_ALL_TASKS" — never wired to a UI button, only
@@ -63,8 +69,16 @@ function getOrCreatePhotoFolder_() {
   return DriveApp.createFolder(DRIVE_FOLDER_NAME);
 }
 
-// Converts a base64 data URL into a shareable Drive link. If the value is
-// already a URL (or empty), it's passed through unchanged.
+// Converts a base64 data URL into a directly embeddable image link. If the
+// value is already a URL (or empty), it's passed through unchanged.
+//
+// IMPORTANT: file.getUrl() returns Drive's *viewer page* URL
+// (drive.google.com/file/d/ID/view), which browsers cannot render inside an
+// <img> tag -- it loads as a broken image. Using the uc?export=view form
+// instead returns the raw image bytes directly, which is what <img src>
+// actually needs. This is why photos looked fine immediately after local
+// upload (still a base64 preview) but vanished after any save/refresh
+// round-trip through Drive.
 function saveBase64ImageToDrive_(base64Data, filename) {
   if (!base64Data || typeof base64Data !== 'string') return '';
   if (base64Data.startsWith('http://') || base64Data.startsWith('https://')) {
@@ -81,7 +95,7 @@ function saveBase64ImageToDrive_(base64Data, filename) {
     const folder = getOrCreatePhotoFolder_();
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return file.getUrl();
+    return 'https://drive.google.com/uc?export=view&id=' + file.getId();
   } catch (err) {
     return '';
   }
@@ -554,12 +568,27 @@ function findUserRow_(sheet, username) {
   return null;
 }
 
+// The "department" column stores one or more department names as a
+// comma-separated string (e.g. "PDC,Die Maint,SPM,Fettling") — one person
+// can head multiple departments. Empty/blank means plant-wide (null).
+function parseDepartments_(cellValue) {
+  const raw = String(cellValue || '').trim();
+  if (!raw) return null;
+  const list = raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  return list.length ? list : null;
+}
+
+function joinDepartments_(departments) {
+  if (!departments || !departments.length) return '';
+  return departments.join(',');
+}
+
 function userRowToRecord_(row, includeHash) {
   const record = {
     username: row[0],
     displayName: row[1],
     role: row[3],
-    department: row[4] || null,
+    departments: parseDepartments_(row[4]),
     mustChangePassword: row[5] === true || String(row[5]).toUpperCase() === 'TRUE',
     createdAt: row[6]
   };
@@ -615,7 +644,7 @@ function doCreateUser(payload) {
       item.displayName,
       item.passwordHash,
       item.role,
-      item.department || '',
+      joinDepartments_(item.departments),
       false,
       new Date().toISOString()
     ]);
@@ -638,7 +667,7 @@ function doUpdateUser(payload) {
     }
     if (item.displayName !== undefined) sheet.getRange(found.rowIndex, 2).setValue(item.displayName);
     if (item.role !== undefined) sheet.getRange(found.rowIndex, 4).setValue(item.role);
-    if (item.department !== undefined) sheet.getRange(found.rowIndex, 5).setValue(item.department || '');
+    if (item.departments !== undefined) sheet.getRange(found.rowIndex, 5).setValue(joinDepartments_(item.departments));
     return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {

@@ -13,6 +13,21 @@ export function isRaisedToOtherDept(originatorDept?: string, targetDept?: string
   return true;
 }
 
+// Shared DSI/Kaizen classification predicate — used both to build the
+// Kaizen/DSI tab's list and to compute the header's tab badge count, so the
+// two always agree with each other.
+export function isKaizenAction(a: ActionItem): boolean {
+  const desc = a.desc.toLowerCase();
+  return (
+    a.isKaizen ||
+    desc.includes('kaizen') ||
+    desc.includes('dsi') ||
+    (a.actionNotes || '').toLowerCase().includes('dsi') ||
+    desc.includes('pokayoke') ||
+    desc.includes('5s')
+  );
+}
+
 const STORAGE_KEY = 'samarth_industries_matrix_v4';
 
 // Tasks live entirely in the connected Google Sheet — this is only an

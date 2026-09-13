@@ -9,7 +9,7 @@ export interface AuthUser {
   username: string;
   displayName: string;
   role: Role;
-  department: string | null; // null = plant-wide (PlantHead / MD / Admin)
+  departments: string[] | null; // null = plant-wide (PlantHead / MD / Admin); 1+ entries for DeptHead/Viewer — one person can head multiple departments
   mustChangePassword: boolean;
 }
 
@@ -32,13 +32,15 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
 
 type ScopedTask = Pick<ActionItem, 'dept' | 'originatorDept'>;
 
-// A task is "in scope" for a department-scoped user if their department either
-// owns it or raised it to another department (mirrors the existing CFT Handshake
-// concept — isRaisedToOtherDept / originatorDept — so a DeptHead never loses
-// visibility into tasks their own department raised elsewhere).
+// A task is "in scope" for a department-scoped user if any of their
+// departments either owns it or raised it to another department (mirrors the
+// existing CFT Handshake concept — isRaisedToOtherDept / originatorDept — so
+// a DeptHead never loses visibility into tasks their own department raised
+// elsewhere). A user can be scoped to multiple departments (e.g. one person
+// heading several depts), so this checks membership, not equality.
 export function isDeptInScope(user: AuthUser, task: ScopedTask): boolean {
-  if (!user.department) return true; // plant-wide role
-  return task.dept === user.department || task.originatorDept === user.department;
+  if (!user.departments) return true; // plant-wide role
+  return user.departments.includes(task.dept) || user.departments.includes(task.originatorDept);
 }
 
 export function can(user: AuthUser | null, permission: Permission, task?: ScopedTask): boolean {

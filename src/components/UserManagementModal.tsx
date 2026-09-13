@@ -51,7 +51,14 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newTempPassword, setNewTempPassword] = useState('');
   const [newRole, setNewRole] = useState<Role>('DeptHead');
-  const [newDepartment, setNewDepartment] = useState(DEPARTMENTS[0]);
+  // One person can head multiple departments, so this is a set, not a single select.
+  const [newDepartments, setNewDepartments] = useState<string[]>([DEPARTMENTS[0]]);
+
+  const toggleNewDepartment = (dept: string) => {
+    setNewDepartments((prev) =>
+      prev.includes(dept) ? prev.filter((d) => d !== dept) : [...prev, dept]
+    );
+  };
 
   const loadUsers = async () => {
     setIsLoading(true);
@@ -81,6 +88,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       setErrorMsg('Username, display name, and a temp password (min. 4 characters) are required.');
       return;
     }
+    if (isDeptScoped && newDepartments.length === 0) {
+      setErrorMsg('Select at least one department for this role.');
+      return;
+    }
     if (isCreating) return;
 
     setIsCreating(true);
@@ -91,7 +102,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         displayName: newDisplayName.trim(),
         passwordHash,
         role: newRole,
-        department: isDeptScoped ? newDepartment : null
+        departments: isDeptScoped ? newDepartments : null
       });
       if (!success) {
         setErrorMsg('Failed to create user. The username may already exist.');
@@ -102,6 +113,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       setNewUsername('');
       setNewDisplayName('');
       setNewTempPassword('');
+      setNewDepartments([DEPARTMENTS[0]]);
       setIsAdding(false);
       loadUsers();
     } catch (err: any) {
@@ -241,26 +253,38 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono outline-none focus:border-blue-500"
                 required
               />
-              <div className="grid grid-cols-2 gap-2.5">
-                <select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as Role)}
-                  className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500"
-                >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-                <select
-                  value={newDepartment}
-                  onChange={(e) => setNewDepartment(e.target.value)}
-                  disabled={!isDeptScoped}
-                  className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400"
+              <select
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value as Role)}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500"
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Department{isDeptScoped ? 's (select 1 or more — one person can head several)' : ''}
+                </label>
+                <div
+                  className={`max-h-32 overflow-y-auto border border-slate-300 rounded-lg p-2 grid grid-cols-2 gap-x-2 gap-y-1 ${
+                    isDeptScoped ? 'bg-white' : 'bg-slate-100 opacity-60 pointer-events-none'
+                  }`}
                 >
                   {DEPARTMENTS.map((d) => (
-                    <option key={d} value={d}>{d}</option>
+                    <label key={d} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newDepartments.includes(d)}
+                        onChange={() => toggleNewDepartment(d)}
+                        disabled={!isDeptScoped}
+                        className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                      />
+                      <span className="truncate">{d}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
               <button
                 type="submit"
@@ -288,7 +312,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     {u.displayName} <span className="text-slate-400 font-normal">@{u.username}</span>
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    {u.role}{u.department ? ` • ${u.department}` : ' • Plant-wide'}
+                    {u.role}{u.departments?.length ? ` • ${u.departments.join(', ')}` : ' • Plant-wide'}
                     {u.mustChangePassword && <span className="text-amber-600"> • Password reset pending</span>}
                   </div>
                 </div>

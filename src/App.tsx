@@ -3,7 +3,8 @@ import { ActionItem, FilterState, SentinelStats, ActionStatus } from './types';
 import {
   getInitialActions,
   saveActionsToStorage,
-  isRaisedToOtherDept
+  isRaisedToOtherDept,
+  isKaizenAction
 } from './data/sentinelDataLoader';
 import {
   subscribeToTabBroadcast,
@@ -43,8 +44,10 @@ export default function App() {
 
   // Department scoping is derived directly from the signed-in session — there
   // is no more URL-param or password-bypass path to acquire a locked dept.
-  const lockedDept = session?.department ?? null;
-  const isRestrictedHodMode = lockedDept !== null;
+  // One person can head multiple departments, so this is a set, not a single
+  // value; null means plant-wide (PlantHead/MD/Admin).
+  const lockedDepts = session?.departments ?? null;
+  const isRestrictedHodMode = lockedDepts !== null;
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -66,24 +69,30 @@ export default function App() {
     onlyBroadcast: false
   });
 
-  // Bulletproof filter updater: strictly preserves lockedDept if active
+  // Bulletproof filter updater: rejects any attempt to filter to a department
+  // outside the signed-in user's own set (visibleActions is already scoped by
+  // isDeptInScope, so leaving filters.dept at '' shows the union of all their
+  // departments — no need to force a specific one, even for multi-dept users).
   const setGuardedFilters = useCallback((updater: React.SetStateAction<FilterState>) => {
     setFilters(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (lockedDept) {
-        return { ...next, dept: lockedDept };
+      if (lockedDepts && next.dept && !lockedDepts.includes(next.dept)) {
+        return prev;
       }
       return next;
     });
-  }, [lockedDept]);
+  }, [lockedDepts]);
 
-  // Lock the department filter to the signed-in user's department as soon as
-  // they log in (or when a fresh session with a department loads on mount).
-  useEffect(() => {
-    if (lockedDept) {
-      setFilters(prev => ({ ...prev, dept: lockedDept }));
+  // Shared guard for any UI action that tries to switch the department view:
+  // plant-wide users (lockedDepts === null) can go anywhere; dept-scoped
+  // users (possibly heading several departments) are limited to their own set.
+  const guardDeptSelect = useCallback((dept: string): boolean => {
+    if (lockedDepts && dept && !lockedDepts.includes(dept)) {
+      showToast(`Access Restricted: ${dept} is not one of your assigned departments.`);
+      return false;
     }
-  }, [lockedDept]);
+    return true;
+  }, [lockedDepts, showToast]);
 
   const handleLogout = useCallback(() => {
     clearSession();
@@ -160,7 +169,7 @@ export default function App() {
   // roles (DeptHead/Viewer) see tasks their department owns OR raised to
   // another department (handshake visibility in both directions).
   const visibleActions = useMemo(() => {
-    if (!session || !session.department) return actions;
+    if (!session || !session.departments) return actions;
     return actions.filter(a => isDeptInScope(session, a));
   }, [actions, session]);
 
@@ -188,7 +197,7 @@ export default function App() {
       if (a.priority === 'A') criticalPriorityA++;
       else standardPriorityB++;
 
-      if (a.isKaizen) kaizenCount++;
+      if (isKaizenAction(a)) kaizenCount++;
 
       if (a.status !== 'Completed' && a.deadline && a.deadline <= today) {
         overdueCount++;
@@ -235,10 +244,21 @@ export default function App() {
     if (updatedItem) {
       broadcastLocalUpdate('UPDATE', updatedItem);
       if (isGoogleSheetConnected()) {
-        const ok = await updateActionInGoogleSheet(updatedItem);
-        if (!ok) {
+        const photoLinks = await updateActionInGoogleSheet(updatedItem);
+        if (!photoLinks) {
           showToast(`Task #${id} updated locally but failed to sync — please retry.`);
           return false;
+        }
+        // The backend may have converted a base64 photo into a canonical
+        // Drive link — replace local state with it so the image actually
+        // renders (a raw Drive viewer-page URL isn't embeddable as <img>).
+        if (photoLinks.attachedPhoto !== updatedItem.attachedPhoto || photoLinks.afterPhoto !== updatedItem.afterPhoto) {
+          const finalItem = { ...updatedItem, ...photoLinks };
+          setActions(prev => {
+            const next = prev.map(item => item.id === id ? finalItem : item);
+            saveActionsToStorage(next);
+            return next;
+          });
         }
       }
     }
@@ -276,19 +296,24 @@ export default function App() {
       showToast('Access denied: you do not have permission to edit this task.');
       return false;
     }
+    let finalItem = updated;
     if (isGoogleSheetConnected()) {
-      const ok = await updateActionInGoogleSheet(updated);
-      if (!ok) {
+      const photoLinks = await updateActionInGoogleSheet(updated);
+      if (!photoLinks) {
         showToast(`Failed to save Task #${updated.id} — Google Sheet sync error. Please try again.`);
         return false;
       }
+      // Replace any raw base64 photo with the backend's canonical Drive link
+      // (a Drive viewer-page URL isn't embeddable as <img>, so without this
+      // the photo would render fine here but vanish after the next refresh).
+      finalItem = { ...updated, ...photoLinks };
     }
     setActions(prev => {
-      const next = prev.map(item => item.id === updated.id ? updated : item);
+      const next = prev.map(item => item.id === finalItem.id ? finalItem : item);
       saveActionsToStorage(next);
       return next;
     });
-    broadcastLocalUpdate('UPDATE', updated);
+    broadcastLocalUpdate('UPDATE', finalItem);
     showToast(`Task #${updated.id} successfully updated & synced across links`);
     return true;
   }, [session, showToast]);
@@ -305,19 +330,27 @@ export default function App() {
       showToast('Google Sheet backend is not configured. Contact your administrator.');
       return false;
     }
-    const newId = await createActionInGoogleSheet(newItemData);
-    if (!newId) {
+    const created = await createActionInGoogleSheet(newItemData);
+    if (!created) {
       showToast('Failed to create task — Google Sheet sync error. Please try again.');
       return false;
     }
-    const newItem: ActionItem = { ...newItemData, id: newId };
+    // Use the backend's canonical Drive photo links (if any) instead of the
+    // raw base64 this modal collected — a Drive viewer-page URL isn't
+    // embeddable as <img>, so without this the photo would vanish on refresh.
+    const newItem: ActionItem = {
+      ...newItemData,
+      id: created.id,
+      attachedPhoto: created.attachedPhoto ?? newItemData.attachedPhoto,
+      afterPhoto: created.afterPhoto ?? newItemData.afterPhoto
+    };
     setActions(prev => {
       const next = [newItem, ...prev];
       saveActionsToStorage(next);
       return next;
     });
     broadcastLocalUpdate('UPDATE', newItem);
-    showToast(`Created new Action #${newId} & broadcasted to all links`);
+    showToast(`Created new Action #${created.id} & broadcasted to all links`);
     return true;
   }, [session, showToast]);
 
@@ -369,6 +402,10 @@ export default function App() {
         totalCount={stats.totalActions}
         completedCount={stats.completed}
         cftCount={cftActions.length}
+        momCount={momActions.length}
+        recurringCount={recurringActions.length}
+        kaizenCount={stats.kaizenCount}
+        overdueCount={stats.overdueCount}
         onOpenNewModal={() => setIsNewModalOpen(true)}
         onRefresh={handleRefresh}
         session={session}
@@ -377,14 +414,11 @@ export default function App() {
         onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
         currentDept={filters.dept}
         onSelectDept={(dept) => {
-          if (lockedDept && dept !== lockedDept) {
-            showToast(`Access Restricted: Locked to ${lockedDept} department.`);
-            return;
-          }
+          if (!guardDeptSelect(dept)) return;
           setGuardedFilters(prev => ({ ...prev, dept }));
         }}
         isRestrictedHodMode={isRestrictedHodMode}
-        lockedDept={lockedDept}
+        lockedDepts={lockedDepts}
       />
 
       {/* Restricted Department Mode Notice */}
@@ -392,10 +426,10 @@ export default function App() {
         <div className="bg-amber-50/95 border-b border-amber-300 px-4 sm:px-8 py-2.5 flex items-center gap-2 text-xs text-amber-950 animate-in fade-in">
           <span className="px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 font-bold text-[10px] tracking-wide uppercase flex items-center gap-1 shadow-2xs">
             <Lock className="w-3 h-3 text-amber-800" />
-            {session.role} Access: {lockedDept}
+            {session.role} Access: {lockedDepts!.join(', ')}
           </span>
           <span>
-            Signed in as <strong>{session.displayName}</strong>. View is locked to {lockedDept} (and tasks {lockedDept} has raised to other departments).
+            Signed in as <strong>{session.displayName}</strong>. View is locked to {lockedDepts!.join(', ')} (and tasks they've raised to other departments).
           </span>
         </div>
       )}
@@ -430,17 +464,14 @@ export default function App() {
             />
             <AnalyticsView
               actions={visibleActions}
-              lockedDept={lockedDept}
+              lockedDept={lockedDepts?.[0] ?? null}
               onSelectDept={(dept) => {
-                if (lockedDept && dept !== lockedDept) {
-                  showToast(`Access Restricted: Locked to ${lockedDept} department.`);
-                  return;
-                }
+                if (!guardDeptSelect(dept)) return;
                 setGuardedFilters(prev => ({ ...prev, dept }));
                 setActiveTab('matrix');
               }}
               onSelectPriority={(priority) => {
-                if (lockedDept) return;
+                if (lockedDepts) return;
                 setGuardedFilters(prev => ({ ...prev, priority }));
                 setActiveTab('matrix');
               }}
@@ -458,7 +489,7 @@ export default function App() {
             onUpdateStatus={handleUpdateStatus}
             onOpenNewModal={() => setIsNewModalOpen(true)}
             onDelete={handleDeleteAction}
-            lockedDept={lockedDept}
+            lockedDepts={lockedDepts}
           />
         )}
 
@@ -493,7 +524,7 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onOpenNewModal={() => setIsNewModalOpen(true)}
               onDelete={handleDeleteAction}
-              lockedDept={lockedDept}
+              lockedDepts={lockedDepts}
             />
           </div>
         )}
@@ -529,7 +560,7 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onOpenNewModal={() => setIsNewModalOpen(true)}
               onDelete={handleDeleteAction}
-              lockedDept={lockedDept}
+              lockedDepts={lockedDepts}
             />
           </div>
         )}
@@ -565,7 +596,7 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onOpenNewModal={() => setIsNewModalOpen(true)}
               onDelete={handleDeleteAction}
-              lockedDept={lockedDept}
+              lockedDepts={lockedDepts}
             />
           </div>
         )}
@@ -576,7 +607,7 @@ export default function App() {
             actions={visibleActions}
             onOpenDetail={(action) => setSelectedAction(action)}
             onOpenNewModal={() => setIsNewModalOpen(true)}
-            lockedDept={lockedDept}
+            lockedDepts={lockedDepts}
           />
         )}
 
@@ -584,12 +615,9 @@ export default function App() {
         {activeTab === 'dept_leaders' && (
           <DepartmentDirectoryView
             actions={visibleActions}
-            lockedDept={lockedDept}
+            lockedDepts={lockedDepts}
             onSelectDepartment={(dept) => {
-              if (lockedDept && dept !== lockedDept) {
-                showToast(`Access Restricted: You are locked to ${lockedDept}.`);
-                return;
-              }
+              if (!guardDeptSelect(dept)) return;
               setGuardedFilters(prev => ({ ...prev, dept }));
               setActiveTab('matrix');
             }}
@@ -622,7 +650,6 @@ export default function App() {
         onClose={() => setSelectedAction(null)}
         onSave={handleSaveAction}
         onDelete={handleDeleteAction}
-        currentDept={filters.dept}
         session={session}
       />
 
@@ -631,7 +658,7 @@ export default function App() {
         isOpen={isNewModalOpen}
         onClose={() => setIsNewModalOpen(false)}
         onAdd={handleAddAction}
-        lockedDept={lockedDept}
+        lockedDepts={lockedDepts}
       />
 
       {/* User Management Modal (Admin only) */}

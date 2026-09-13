@@ -38,7 +38,7 @@ interface ActionRegisterViewProps {
   onUpdateStatus: (id: string, newStatus: ActionStatus) => void;
   onOpenNewModal: () => void;
   onDelete?: (id: string) => void;
-  lockedDept?: string | null;
+  lockedDepts?: string[] | null;
 }
 
 type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'closed';
@@ -51,7 +51,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   onUpdateStatus,
   onOpenNewModal,
   onDelete,
-  lockedDept = null
+  lockedDepts = null
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
@@ -63,9 +63,16 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   // Today's operational date
   const TODAY_STR = '2026-09-11';
 
+  // One person can head several departments — a single dept stays a hard,
+  // non-interactive lock; more than one becomes a dropdown constrained to
+  // just their own departments.
+  const isSingleDept = (lockedDepts?.length ?? 0) === 1;
+  const isMultiDept = (lockedDepts?.length ?? 0) > 1;
+
   // Department list — the full canonical set, so the filter is populated
-  // even before any tasks exist yet.
-  const departments = TASK_DEPARTMENTS;
+  // even before any tasks exist yet. Dept-scoped users only ever see their
+  // own department(s) here, never the full plant list.
+  const departments = lockedDepts ?? TASK_DEPARTMENTS;
 
   // Assignees list — every department's default placeholder + dept head + supervisors
   const assigneesList = ALL_ASSIGNEES;
@@ -185,14 +192,14 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
 
           {/* Department Select Dropdown / Locked State */}
           <div className="relative min-w-[150px]">
-            {lockedDept ? (
-              <div 
+            {isSingleDept ? (
+              <div
                 className="w-full bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold py-2 px-3 rounded-xl flex items-center justify-between shadow-2xs cursor-not-allowed select-none"
-                title={`Department locked to ${lockedDept}. Department switching is restricted on HOD links.`}
+                title={`Department locked to ${lockedDepts![0]}. Department switching is restricted on HOD links.`}
               >
                 <div className="flex items-center gap-1.5 truncate">
                   <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                  <span className="truncate">{lockedDept} (Locked)</span>
+                  <span className="truncate">{lockedDepts![0]} (Locked)</span>
                 </div>
               </div>
             ) : (
@@ -205,7 +212,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                   }}
                   className="w-full appearance-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-medium py-2 pl-3 pr-8 rounded-xl outline-none focus:border-blue-500 transition-colors cursor-pointer shadow-2xs"
                 >
-                  <option value="">All Departments</option>
+                  <option value="">{isMultiDept ? 'All My Departments' : 'All Departments'}</option>
                   {departments.map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
@@ -267,7 +274,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                 : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            {lockedDept ? `${lockedDept} Tasks` : 'All Tasks'} ({actions.length})
+            {isSingleDept ? `${lockedDepts![0]} Tasks` : isMultiDept ? 'My Depts Tasks' : 'All Tasks'} ({actions.length})
           </button>
 
           {/* Priority A */}
@@ -528,12 +535,20 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                         <div className="font-medium text-slate-900 leading-relaxed group-hover:text-blue-950">
                           {item.desc}
                         </div>
-                        {item.machineNote && (
-                          <div className="text-[11px] text-slate-400 font-mono mt-0.5 flex items-center gap-1">
-                            <span className="font-semibold text-slate-400">M/C:</span>
-                            <span>{item.machineNote}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                          {item.recurrence !== 'One-Time' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                              <RefreshCw className="w-2.5 h-2.5" />
+                              <span>{item.recurrence}</span>
+                            </span>
+                          )}
+                          {item.machineNote && (
+                            <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
+                              <span className="font-semibold text-slate-400">M/C:</span>
+                              <span>{item.machineNote}</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* ASSIGNEE */}

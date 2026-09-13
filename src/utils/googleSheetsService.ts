@@ -137,28 +137,46 @@ function toSheetTaskPayload(action: Omit<ActionItem, 'id'> & { id?: string }) {
   };
 }
 
+// Photo fields the backend may hand back after converting a base64 upload
+// into a Drive-hosted image link (see saveBase64ImageToDrive_ in the Apps
+// Script). Callers should overwrite their local attachedPhoto/afterPhoto
+// with these when present, instead of keeping the raw base64 they sent —
+// otherwise the local cache keeps re-sending the same base64 blob on every
+// later save (re-uploading duplicate Drive files each time).
+interface PhotoLinks {
+  attachedPhoto?: string;
+  afterPhoto?: string;
+}
+
 /**
- * Push an updated task row to the Google Sheet
+ * Push an updated task row to the Google Sheet. Returns the canonical
+ * (Drive-hosted) photo links on success so the caller can replace any raw
+ * base64 it's still holding, or null on failure.
  */
-export async function updateActionInGoogleSheet(action: ActionItem): Promise<boolean> {
-  if (!isGoogleSheetConnected()) return false;
+export async function updateActionInGoogleSheet(action: ActionItem): Promise<PhotoLinks | null> {
+  if (!isGoogleSheetConnected()) return null;
   try {
-    await sendToAppsScript({
+    const result = await sendToAppsScript({
       action: 'UPDATE_TASK',
       data: toSheetTaskPayload(action)
     });
+    if (result?.status !== 'success') {
+      console.warn('Google Sheet rejected the task update:', result);
+      return null;
+    }
     updateLastSyncTime();
-    return true;
+    return { attachedPhoto: result.attachedPhoto || undefined, afterPhoto: result.afterPhoto || undefined };
   } catch (err) {
     console.warn('Failed to update task in Google Sheet:', err);
-    return false;
+    return null;
   }
 }
 
 /**
- * Push a newly created task to the Google Sheet
+ * Push a newly created task to the Google Sheet. Returns the server-assigned
+ * ID plus the canonical (Drive-hosted) photo links, or null on failure.
  */
-export async function createActionInGoogleSheet(action: Omit<ActionItem, 'id'>): Promise<string | null> {
+export async function createActionInGoogleSheet(action: Omit<ActionItem, 'id'>): Promise<(PhotoLinks & { id: string }) | null> {
   if (!isGoogleSheetConnected()) return null;
   try {
     const result = await sendToAppsScript({
@@ -167,7 +185,11 @@ export async function createActionInGoogleSheet(action: Omit<ActionItem, 'id'>):
     });
     if (result?.status === 'success' && result.createdId) {
       updateLastSyncTime();
-      return String(result.createdId);
+      return {
+        id: String(result.createdId),
+        attachedPhoto: result.attachedPhoto || undefined,
+        afterPhoto: result.afterPhoto || undefined
+      };
     }
     console.warn('Google Sheet did not return a created task ID:', result);
     return null;
@@ -262,7 +284,7 @@ export async function testGoogleSheetConnection(testUrl?: string): Promise<{ suc
 export async function loginUser(
   username: string,
   passwordHash: string
-): Promise<{ username: string; displayName: string; role: string; department: string | null; mustChangePassword: boolean } | null> {
+): Promise<{ username: string; displayName: string; role: string; departments: string[] | null; mustChangePassword: boolean } | null> {
   if (!isGoogleSheetConnected()) throw new Error('Google Sheet Web App URL is not configured.');
   const result = await sendToAppsScript({ action: 'LOGIN', username, passwordHash });
   if (result && result.status === 'success' && result.user) {
@@ -275,7 +297,7 @@ export interface AppsScriptUserRecord {
   username: string;
   displayName: string;
   role: string;
-  department: string | null;
+  departments: string[] | null;
   mustChangePassword: boolean;
   createdAt: string;
 }
@@ -304,7 +326,7 @@ export async function createUser(user: {
   displayName: string;
   passwordHash: string;
   role: string;
-  department: string | null;
+  departments: string[] | null;
 }): Promise<boolean> {
   const result = await sendToAppsScript({ action: 'CREATE_USER', data: user });
   return result?.status === 'success';
@@ -314,7 +336,7 @@ export async function updateUser(user: {
   username: string;
   displayName?: string;
   role?: string;
-  department?: string | null;
+  departments?: string[] | null;
 }): Promise<boolean> {
   const result = await sendToAppsScript({ action: 'UPDATE_USER', data: user });
   return result?.status === 'success';

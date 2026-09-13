@@ -40,8 +40,12 @@ interface HeaderProps {
   currentDept?: string;
   onSelectDept?: (dept: string) => void;
   isRestrictedHodMode?: boolean;
-  lockedDept?: string | null;
+  lockedDepts?: string[] | null;
   cftCount?: number;
+  momCount?: number;
+  recurringCount?: number;
+  kaizenCount?: number;
+  overdueCount?: number;
 }
 
 type TabColor = 'blue' | 'amber' | 'purple' | 'emerald';
@@ -74,8 +78,12 @@ export const Header: React.FC<HeaderProps> = ({
   currentDept = '',
   onSelectDept,
   isRestrictedHodMode = false,
-  lockedDept = null,
-  cftCount
+  lockedDepts = null,
+  cftCount,
+  momCount = 0,
+  recurringCount = 0,
+  kaizenCount = 0,
+  overdueCount = 0
 }) => {
   const [showDeptMenu, setShowDeptMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -86,6 +94,13 @@ export const Header: React.FC<HeaderProps> = ({
   const isSpecificDeptSelected = Boolean(currentDept && currentDept !== '' && currentDept !== 'All Departments');
 
   const deptScopes = ['All Departments', ...TASK_DEPARTMENTS];
+
+  // One person can head several departments — a single dept stays a hard,
+  // non-interactive lock (unchanged UX for the common case); more than one
+  // becomes a dropdown constrained to just their own departments.
+  const isSingleDept = (lockedDepts?.length ?? 0) === 1;
+  const isMultiDept = (lockedDepts?.length ?? 0) > 1;
+  const scopeOptions = lockedDepts ? ['All My Departments', ...lockedDepts] : deptScopes;
 
   const displayScopeName = isSpecificDeptSelected
     ? `Dept: ${currentDept}`
@@ -106,12 +121,12 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const navTabs: { id: NavTab; label: string; icon: React.ElementType; badge: string; color: TabColor }[] = [
-    { id: 'cockpit', label: 'Cockpit', icon: LayoutGrid, badge: '167 alert', color: 'blue' },
+    { id: 'cockpit', label: 'Cockpit', icon: LayoutGrid, badge: overdueCount > 0 ? `${overdueCount} alert` : '', color: 'blue' },
     { id: 'matrix', label: 'Master Matrix', icon: SlidersHorizontal, badge: String(totalCount), color: 'blue' },
-    { id: 'saturday_mom', label: 'Saturday MOM', icon: Calendar, badge: '10', color: 'blue' },
-    { id: 'recurring_pm', label: 'Recurring PM', icon: RotateCw, badge: '2', color: 'amber' },
-    { id: 'cft_handshake', label: 'CFT Handshake', icon: Users, badge: String(cftCount ?? 915), color: 'purple' },
-    { id: 'kaizen', label: 'Kaizen / DSI', icon: Sparkles, badge: '52', color: 'emerald' },
+    { id: 'saturday_mom', label: 'Saturday MOM', icon: Calendar, badge: String(momCount), color: 'blue' },
+    { id: 'recurring_pm', label: 'Recurring PM', icon: RotateCw, badge: String(recurringCount), color: 'amber' },
+    { id: 'cft_handshake', label: 'CFT Handshake', icon: Users, badge: String(cftCount ?? 0), color: 'purple' },
+    { id: 'kaizen', label: 'Kaizen / DSI', icon: Sparkles, badge: String(kaizenCount), color: 'emerald' },
     { id: 'dept_leaders', label: 'Dept Leaders & 4-V', icon: UserCheck, badge: '', color: 'blue' }
   ];
 
@@ -197,38 +212,37 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="hidden sm:flex items-center gap-2 sm:gap-2.5">
           {/* Department Scope Dropdown */}
           <div className="relative">
-            {lockedDept ? (
+            {isSingleDept ? (
               <div
                 className="border border-amber-300 bg-amber-50 text-amber-950 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs cursor-not-allowed select-none"
-                title={`Restricted view permanently locked to ${lockedDept}. Department switching is disabled.`}
+                title={`Restricted view permanently locked to ${lockedDepts![0]}. Department switching is disabled.`}
               >
                 <span className="text-amber-700 text-xs">🔒</span>
                 <span className="max-w-[130px] sm:max-w-[165px] truncate">
-                  {lockedDept} (Locked)
+                  {lockedDepts![0]} (Locked)
                 </span>
               </div>
             ) : (
               <button
-                onClick={() => {
-                  if (!isRestrictedHodMode) setShowDeptMenu(!showDeptMenu);
-                }}
-                disabled={isRestrictedHodMode}
-                className={`border bg-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors ${
-                  isRestrictedHodMode
-                    ? 'border-amber-300 bg-amber-50/60 text-amber-900 cursor-not-allowed'
-                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700'
+                onClick={() => setShowDeptMenu(!showDeptMenu)}
+                className={`border text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors ${
+                  isMultiDept
+                    ? 'border-amber-300 bg-amber-50/60 text-amber-900 hover:bg-amber-100'
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-700'
                 }`}
-                title={isRestrictedHodMode ? `Restricted view locked to ${currentDept}` : 'Filter department view'}
+                title={isMultiDept ? `Restricted to your departments: ${lockedDepts!.join(', ')}` : 'Filter department view'}
               >
-                <span className="text-amber-500 text-xs">{isRestrictedHodMode ? '🔒' : '🌟'}</span>
+                <span className="text-amber-500 text-xs">{isMultiDept ? '🔒' : '🌟'}</span>
                 <span className="max-w-[130px] sm:max-w-[165px] truncate text-slate-800">
-                  {isRestrictedHodMode ? `${currentDept} (HOD Only)` : displayScopeName}
+                  {isMultiDept
+                    ? (isSpecificDeptSelected ? `Dept: ${currentDept}` : 'All My Departments')
+                    : displayScopeName}
                 </span>
-                {!isRestrictedHodMode && <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
             )}
 
-            {showDeptMenu && !isRestrictedHodMode && !lockedDept && (
+            {showDeptMenu && !isSingleDept && (
               <div className="absolute right-0 mt-1 w-72 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-50 text-xs text-slate-700 animate-in fade-in slide-in-from-top-1">
                 <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
                   <span>Select Scope View</span>
@@ -244,14 +258,15 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   )}
                 </div>
-                {deptScopes.map((scope) => {
-                  const isSelected = (scope === 'All Departments' && !isSpecificDeptSelected) || currentDept === scope;
+                {scopeOptions.map((scope) => {
+                  const isAllOption = scope === 'All Departments' || scope === 'All My Departments';
+                  const isSelected = (isAllOption && !isSpecificDeptSelected) || currentDept === scope;
                   return (
                     <button
                       key={scope}
                       onClick={() => {
                         if (onSelectDept) {
-                          onSelectDept(scope === 'All Departments' ? '' : scope);
+                          onSelectDept(isAllOption ? '' : scope);
                         }
                         setShowDeptMenu(false);
                       }}
@@ -298,7 +313,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-50 text-xs text-slate-700 animate-in fade-in slide-in-from-top-1">
                 <div className="px-3 py-1.5 border-b border-slate-100">
                   <div className="font-bold text-slate-900">{session.displayName}</div>
-                  <div className="text-[11px] text-slate-500">{session.role}{session.department ? ` • ${session.department}` : ' • Plant-wide'}</div>
+                  <div className="text-[11px] text-slate-500">{session.role}{session.departments ? ` • ${session.departments.join(', ')}` : ' • Plant-wide'}</div>
                 </div>
                 {accountMenuItems(() => setShowUserMenu(false))}
               </div>
@@ -386,7 +401,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="font-bold text-sm text-slate-900">{session.displayName}</span>
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  {session.role}{session.department ? ` • ${session.department}` : ' • Plant-wide'}
+                  {session.role}{session.departments ? ` • ${session.departments.join(', ')}` : ' • Plant-wide'}
                 </div>
               </div>
 
@@ -395,24 +410,26 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                   Department Scope
                 </div>
-                {lockedDept ? (
+                {isSingleDept ? (
                   <div className="border border-amber-300 bg-amber-50 text-amber-950 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5">
                     <Lock className="w-3.5 h-3.5 text-amber-700" />
-                    <span>{lockedDept} (Locked)</span>
-                  </div>
-                ) : isRestrictedHodMode ? (
-                  <div className="border border-amber-300 bg-amber-50/60 text-amber-900 text-xs font-bold px-3 py-2 rounded-xl">
-                    🔒 {currentDept} (HOD Only)
+                    <span>{lockedDepts![0]} (Locked)</span>
                   </div>
                 ) : (
                   <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
-                    {deptScopes.map((scope) => {
-                      const isSelected = (scope === 'All Departments' && !isSpecificDeptSelected) || currentDept === scope;
+                    {isMultiDept && (
+                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50/60">
+                        🔒 Restricted to your departments
+                      </div>
+                    )}
+                    {scopeOptions.map((scope) => {
+                      const isAllOption = scope === 'All Departments' || scope === 'All My Departments';
+                      const isSelected = (isAllOption && !isSpecificDeptSelected) || currentDept === scope;
                       return (
                         <button
                           key={scope}
                           onClick={() => {
-                            onSelectDept?.(scope === 'All Departments' ? '' : scope);
+                            onSelectDept?.(isAllOption ? '' : scope);
                           }}
                           className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors ${
                             isSelected ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-slate-700'

@@ -24,7 +24,6 @@ interface ActionDetailModalProps {
   onClose: () => void;
   onSave: (updated: ActionItem) => Promise<boolean>;
   onDelete?: (id: string) => Promise<boolean>;
-  currentDept?: string;
   session: AuthUser | null;
 }
 
@@ -33,7 +32,6 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   onClose,
   onSave,
   onDelete,
-  currentDept = '',
   session
 }) => {
   if (!action) return null;
@@ -67,15 +65,25 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const hasReviseAuthority = can(session, 'reviseDeadline');
   const hasDeleteAuthority = can(session, 'deleteTask');
   const canEditTask = can(session, 'editOwnDept', action);
-  const isExecutive = !!session && !session.department; // plant-wide role: PlantHead / MD / Admin
+  const isExecutive = !!session && !session.departments; // plant-wide role: PlantHead / MD / Admin
 
   // Handshake detection
   const originatorDept = action.originatorDept || 'Store';
   const isHandshake = (action.originatorDept && isRaisedToOtherDept(action.originatorDept, action.dept)) || !!action.isCFT;
-  
-  // Is the current viewer the originator (or executive with oversight)?
-  const isOriginator = isExecutive || (!!currentDept && currentDept.toLowerCase() === originatorDept.toLowerCase());
-  const isTargetDept = !isExecutive && !!currentDept && currentDept.toLowerCase() === action.dept.toLowerCase();
+
+  // Is the current viewer the originator (or executive with oversight)? Checked
+  // against the signed-in user's own department membership — not the
+  // currently-selected filter view — so this stays correct for a multi-dept
+  // head even when they're viewing an aggregate "All My Departments" filter.
+  const isOriginator = isExecutive || !!session?.departments?.some(d => d.toLowerCase() === originatorDept.toLowerCase());
+  const isTargetDept = !isExecutive && !!session?.departments?.some(d => d.toLowerCase() === action.dept.toLowerCase());
+
+  // DSI/Kaizen classification should reflect a genuinely finished
+  // improvement, not a placeholder — only checkable once the task is
+  // Completed with both photos and action notes in place. Already-checked
+  // tasks (e.g. legacy data) can still be unchecked regardless.
+  const kaizenRequirementsMet = status === 'Completed' && !!attachedPhoto && !!afterPhoto && actionNotes.trim().length > 0;
+  const kaizenCheckboxDisabled = !canEditTask || (!isKaizen && !kaizenRequirementsMet);
 
   const handleConfirmPermanentDelete = async () => {
     if (!onDelete || isBusy) return;
@@ -618,21 +626,28 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             />
           </div>
 
-          {/* Convert to Kaizen Toggle */}
+          {/* Convert to Kaizen Toggle — only checkable once the task is actually
+              complete with real evidence, so DSI/Kaizen reflects a genuinely
+              finished improvement rather than a placeholder. */}
           <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-2">
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className={`flex items-center gap-2 ${kaizenCheckboxDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
               <input
                 type="checkbox"
                 checked={isKaizen}
                 onChange={(e) => setIsKaizen(e.target.checked)}
-                disabled={!canEditTask}
+                disabled={kaizenCheckboxDisabled}
                 className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 disabled:opacity-50"
               />
-              <span className="font-bold text-emerald-800 text-xs flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span className={`font-bold text-xs flex items-center gap-1.5 ${kaizenCheckboxDisabled ? 'text-slate-400' : 'text-emerald-800'}`}>
+                <Sparkles className={`w-3.5 h-3.5 ${kaizenCheckboxDisabled ? 'text-slate-400' : 'text-emerald-600'}`} />
                 <span>Classify as DSI / Kaizen Continuous Improvement</span>
               </span>
             </label>
+            {!isKaizen && !kaizenRequirementsMet && canEditTask && (
+              <p className="text-[11px] text-slate-500 pl-6">
+                Available once the task is Completed with Before &amp; After photos and action notes filled in.
+              </p>
+            )}
 
             {isKaizen && (
               <input

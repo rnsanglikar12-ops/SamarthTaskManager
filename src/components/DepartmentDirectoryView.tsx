@@ -21,7 +21,7 @@ import {
 interface DepartmentDirectoryViewProps {
   actions: ActionItem[];
   onSelectDepartment: (deptName: string) => void;
-  lockedDept?: string | null;
+  lockedDepts?: string[] | null;
 }
 
 type ViewTab = 'graphical' | 'split' | 'roster';
@@ -29,12 +29,16 @@ type ViewTab = 'graphical' | 'split' | 'roster';
 export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = ({
   actions,
   onSelectDepartment,
-  lockedDept = null
+  lockedDepts = null
 }) => {
   const [activeViewTab, setActiveViewTab] = useState<ViewTab>('graphical');
   const [searchQuery, setSearchQuery] = useState('');
+  // One person can head several departments — a single dept stays a hard,
+  // non-interactive lock; more than one becomes a dropdown constrained to
+  // just their own departments.
+  const isSingleDept = (lockedDepts?.length ?? 0) === 1;
   const [selectedVelocityDept, setSelectedVelocityDept] = useState(
-    lockedDept || 'All Departments (Plant-wide)'
+    isSingleDept ? lockedDepts![0] : 'All Departments (Plant-wide)'
   );
 
   // Department statistics
@@ -151,10 +155,10 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
         {/* Search, View Switches, and Links Modal Button */}
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Locked Notice Indicator */}
-          {lockedDept && (
+          {lockedDepts && (
             <div className="px-3 py-1.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-950 font-bold flex items-center gap-1.5 shadow-2xs">
               <Lock className="w-3.5 h-3.5 text-amber-700" />
-              <span>Assigned Dept: {lockedDept} (Locked)</span>
+              <span>Assigned Dept{lockedDepts.length > 1 ? 's' : ''}: {lockedDepts.join(', ')} (Locked)</span>
             </div>
           )}
 
@@ -224,10 +228,10 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
 
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500 font-medium">Department:</span>
-              {lockedDept ? (
+              {isSingleDept ? (
                 <div className="py-1 px-3 bg-amber-50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 flex items-center gap-1 shadow-2xs">
                   <Lock className="w-3 h-3 text-amber-700" />
-                  <span>{lockedDept} (Locked)</span>
+                  <span>{lockedDepts![0]} (Locked)</span>
                 </div>
               ) : (
                 <select
@@ -235,8 +239,10 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                   onChange={(e) => setSelectedVelocityDept(e.target.value)}
                   className="py-1.5 px-3 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 shadow-2xs"
                 >
-                  <option value="All Departments (Plant-wide)">All Departments (Plant-wide)</option>
-                  {departmentsList.map(d => (
+                  <option value="All Departments (Plant-wide)">
+                    {lockedDepts ? 'All My Departments' : 'All Departments (Plant-wide)'}
+                  </option>
+                  {(lockedDepts ? departmentsList.filter(d => lockedDepts.includes(d.deptName)) : departmentsList).map(d => (
                     <option key={d.deptName} value={d.deptName}>{d.deptName}</option>
                   ))}
                 </select>
@@ -565,10 +571,10 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                     <div className="text-slate-500 text-[11px]">
                       <strong>{stats.total}</strong> Tasks • <strong>{stats.completed}</strong> Closed
                     </div>
-                    {lockedDept && dept.deptName !== lockedDept ? (
-                      <span 
+                    {lockedDepts && !lockedDepts.includes(dept.deptName) ? (
+                      <span
                         className="text-slate-400 font-medium flex items-center gap-1 text-[11px] cursor-not-allowed select-none"
-                        title={`Access restricted. You are locked to the ${lockedDept} department.`}
+                        title={`Access restricted. You are locked to: ${lockedDepts.join(', ')}.`}
                       >
                         <Lock className="w-3 h-3 text-slate-400" />
                         <span>Locked</span>
@@ -578,7 +584,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                         onClick={() => onSelectDepartment(dept.deptName)}
                         className="text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 text-xs"
                       >
-                        <span>{lockedDept === dept.deptName ? `View ${lockedDept} Tasks` : 'View Tasks'}</span>
+                        <span>{lockedDepts?.includes(dept.deptName) ? `View ${dept.deptName} Tasks` : 'View Tasks'}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     )}

@@ -18,13 +18,13 @@ import {
 } from 'lucide-react';
 import { OnePointSheetModal } from './OnePointSheetModal';
 import { SAMARTH_ORG_STRUCTURE } from '../data/orgStructure';
-import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, isKaizenAction } from '../data/sentinelDataLoader';
 
 interface KaizenHubViewProps {
   actions: ActionItem[];
   onOpenDetail: (action: ActionItem) => void;
   onOpenNewModal: () => void;
-  lockedDept?: string | null;
+  lockedDepts?: string[] | null;
 }
 
 type KaizenCategoryFilter = 
@@ -40,40 +40,29 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
   actions,
   onOpenDetail,
   onOpenNewModal,
-  lockedDept = null
+  lockedDepts = null
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDept, setSelectedDept] = useState(lockedDept || '');
+  // One person can head several departments — a single dept stays a hard,
+  // non-interactive lock; more than one becomes a dropdown constrained to
+  // just their own departments. `actions` is already pre-scoped upstream
+  // (isDeptInScope), so '' naturally shows the union of all their depts.
+  const isSingleDept = (lockedDepts?.length ?? 0) === 1;
+  const [selectedDept, setSelectedDept] = useState(isSingleDept ? lockedDepts![0] : '');
 
-  // Keep in sync if the signed-in user's locked department ever changes
+  // Keep in sync if the signed-in user's locked department(s) ever change
   // (e.g. a different user logs in on the same session).
   useEffect(() => {
-    setSelectedDept(lockedDept || '');
-  }, [lockedDept]);
+    setSelectedDept(isSingleDept ? lockedDepts![0] : '');
+  }, [lockedDepts]);
   const [selectedChampion, setSelectedChampion] = useState('');
   const [activeCategory, setActiveCategory] = useState<KaizenCategoryFilter>('all');
   const [sheetModalAction, setSheetModalAction] = useState<ActionItem | null>(null);
   const [sortField, setSortField] = useState<'id' | 'dept' | 'deadline'>('id');
   const [sortAsc, setSortAsc] = useState(false);
 
-  // Extract Kaizen & DSI initiatives from actions (exactly 52 initiatives matching screenshot)
-  const kaizenActions = useMemo(() => {
-    return actions.filter(a => {
-      // Legacy seed heuristic only applies to plain numeric-looking IDs
-      // (new department-prefixed IDs like "PDC-47" aren't numeric).
-      const numericId = Number(a.id);
-      const inLegacyRange = !isNaN(numericId) && numericId >= 20 && numericId <= 71;
-      return (
-        a.isKaizen ||
-        inLegacyRange ||
-        a.desc.toLowerCase().includes('kaizen') ||
-        a.desc.toLowerCase().includes('dsi') ||
-        a.actionNotes.toLowerCase().includes('dsi') ||
-        a.desc.toLowerCase().includes('pokayoke') ||
-        a.desc.toLowerCase().includes('5s')
-      );
-    });
-  }, [actions]);
+  // Extract Kaizen & DSI initiatives from actions
+  const kaizenActions = useMemo(() => actions.filter(isKaizenAction), [actions]);
 
   // Champions list (the 17 HODs)
   const champions = useMemo(() => {
@@ -147,13 +136,8 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
     });
   }, [kaizenActions, searchQuery, selectedDept, selectedChampion, activeCategory, sortField, sortAsc]);
 
-  // Metrics matching Screenshot 2: Total 52, Completed 44, Active 8, DSI 19, 5S 12, Poka-Yoke 0
   const totalCount = kaizenActions.length;
   const completedCount = kaizenActions.filter(k => k.status === 'Completed').length;
-  const activeCount = totalCount - completedCount;
-  const dsiCount = 19;
-  const fiveSCount = 12;
-  const pokaYokeCount = 0;
 
   const toggleSort = (field: 'id' | 'dept' | 'deadline') => {
     if (sortField === field) {
@@ -196,51 +180,6 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
         </button>
       </div>
 
-      {/* 6 KPI Metric Cards Matching Screenshot 2 */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* Total Kaizens */}
-        <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs">
-          <div className="text-xs text-slate-500 font-medium">Total Kaizens</div>
-          <div className="text-2xl font-bold text-slate-900 mt-0.5">{totalCount}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Plant suggestions</div>
-        </div>
-
-        {/* Completed (Standardized) */}
-        <div className="bg-emerald-50/20 border border-emerald-300 rounded-xl p-3.5 shadow-2xs">
-          <div className="text-xs text-emerald-700 font-semibold">Completed</div>
-          <div className="text-2xl font-bold text-emerald-600 mt-0.5">{completedCount}</div>
-          <div className="text-[11px] text-emerald-600 mt-0.5 font-medium">Standardized</div>
-        </div>
-
-        {/* Active / Trial */}
-        <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs">
-          <div className="text-xs text-blue-700 font-semibold">Active / Trial</div>
-          <div className="text-2xl font-bold text-blue-600 mt-0.5">{activeCount}</div>
-          <div className="text-[11px] text-blue-600 mt-0.5 font-medium">Under verification</div>
-        </div>
-
-        {/* DSI (Zero Defect) */}
-        <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs">
-          <div className="text-xs text-slate-500 font-medium">DSI (Zero Defect)</div>
-          <div className="text-2xl font-bold text-slate-900 mt-0.5">{dsiCount}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Quick containment</div>
-        </div>
-
-        {/* 5S Workplace */}
-        <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs">
-          <div className="text-xs text-slate-500 font-medium">5S Workplace</div>
-          <div className="text-2xl font-bold text-slate-900 mt-0.5">{fiveSCount}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Visual controls</div>
-        </div>
-
-        {/* Poka-Yoke */}
-        <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs">
-          <div className="text-xs text-slate-500 font-medium">Poka-Yoke</div>
-          <div className="text-2xl font-bold text-slate-900 mt-0.5">{pokaYokeCount}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Error proofing</div>
-        </div>
-      </div>
-
       {/* Filter Toolbar Matching Screenshot 2 */}
       <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs space-y-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -257,10 +196,10 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
           </div>
 
           {/* Department Filter */}
-          {lockedDept ? (
+          {isSingleDept ? (
             <div className="py-2 px-3 bg-amber-50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 flex items-center gap-1 shadow-2xs">
               <Lock className="w-3.5 h-3.5 text-amber-700" />
-              <span>{lockedDept} (Locked)</span>
+              <span>{lockedDepts![0]} (Locked)</span>
             </div>
           ) : (
             <select
@@ -268,7 +207,7 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
               onChange={(e) => setSelectedDept(e.target.value)}
               className="py-2 px-3 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:border-emerald-500 shadow-2xs"
             >
-              <option value="">All Departments</option>
+              <option value="">{lockedDepts ? 'All My Departments' : 'All Departments'}</option>
               {departments.map(d => (
                 <option key={d} value={d}>{d}</option>
               ))}
