@@ -16,8 +16,7 @@ import {
   ChevronDown,
   Check,
   Building,
-  ShieldCheck,
-  FileSpreadsheet
+  ShieldCheck
 } from 'lucide-react';
 import { isGoogleSheetConnected } from '../utils/googleSheetsService';
 
@@ -30,7 +29,6 @@ interface HeaderProps {
   completedCount: number;
   onOpenNewModal: () => void;
   onSyncSheet?: () => void;
-  onOpenGoogleSheetsModal?: () => void;
   onOpenSecretControl?: () => void;
   onOpenDeptLinks?: () => void;
   isSecretUnlocked?: boolean;
@@ -48,7 +46,6 @@ export const Header: React.FC<HeaderProps> = ({
   completedCount,
   onOpenNewModal,
   onSyncSheet,
-  onOpenGoogleSheetsModal,
   onOpenSecretControl,
   onOpenDeptLinks,
   isSecretUnlocked = false,
@@ -228,15 +225,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Sync Sheet</span>
               <span className={`w-2 h-2 rounded-full ${isGoogleSheetConnected() ? 'bg-emerald-500 shadow-sm animate-pulse' : 'bg-amber-400'}`}></span>
             </button>
-            {onOpenGoogleSheetsModal && (
-              <button
-                onClick={onOpenGoogleSheetsModal}
-                className="border border-emerald-300 hover:border-emerald-400 bg-white hover:bg-emerald-50 text-emerald-700 p-1.5 rounded-lg shadow-2xs transition-colors"
-                title={isGoogleSheetConnected() ? "Google Sheet Connected (Click to view/manage)" : "Connect Google Sheets Backend"}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-              </button>
-            )}
           </div>
 
           {/* HOD Direct Links (Requirement 7: Strictly visible ONLY in All Departments Executive Scope or when Secret Unlocked - NEVER in individual dept selections) */}

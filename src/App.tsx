@@ -21,7 +21,6 @@ import { ActionDetailModal } from './components/ActionDetailModal';
 import { NewActionModal } from './components/NewActionModal';
 import { SecretControlModal } from './components/SecretControlModal';
 import { DeptHeadLinksModal } from './components/DeptHeadLinksModal';
-import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import {
   isGoogleSheetConnected,
   updateActionInGoogleSheet,
@@ -41,7 +40,6 @@ export default function App() {
   const [isNewModalOpen, setIsNewModalOpen] = useState<boolean>(false);
   const [isSecretModalOpen, setIsSecretModalOpen] = useState<boolean>(false);
   const [isDeptLinksModalOpen, setIsDeptLinksModalOpen] = useState<boolean>(false);
-  const [isGoogleSheetsModalOpen, setIsGoogleSheetsModalOpen] = useState<boolean>(false);
   const [isSecretUnlocked, setIsSecretUnlocked] = useState<boolean>(() => isSecretControlUnlocked());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isRestrictedHodMode, setIsRestrictedHodMode] = useState<boolean>(false);
@@ -124,12 +122,14 @@ export default function App() {
       if (!isGoogleSheetConnected()) return false;
       try {
         const fresh = await fetchActionsFromGoogleSheet();
-        const snapshot = JSON.stringify(fresh);
-        if (fresh && snapshot !== lastSheetSnapshot) {
-          lastSheetSnapshot = snapshot;
-          if (isMounted) {
-            setActions(fresh);
-            saveActionsToStorage(fresh);
+        if (fresh && fresh.length > 0) {
+          const snapshot = JSON.stringify(fresh);
+          if (snapshot !== lastSheetSnapshot) {
+            lastSheetSnapshot = snapshot;
+            if (isMounted) {
+              setActions(fresh);
+              saveActionsToStorage(fresh);
+            }
           }
           return true;
         }
@@ -382,7 +382,6 @@ export default function App() {
         cftCount={cftActions.length}
         onOpenNewModal={() => setIsNewModalOpen(true)}
         onSyncSheet={handleSyncSheet}
-        onOpenGoogleSheetsModal={() => setIsGoogleSheetsModalOpen(true)}
         onOpenSecretControl={() => setIsSecretModalOpen(true)}
         onOpenDeptLinks={() => setIsDeptLinksModalOpen(true)}
         isSecretUnlocked={isSecretUnlocked}
@@ -706,18 +705,6 @@ export default function App() {
         onOpenSecretControl={() => {
           setIsDeptLinksModalOpen(false);
           setIsSecretModalOpen(true);
-        }}
-      />
-
-      {/* Google Sheets Cloud Backend Integration Modal */}
-      <GoogleSheetsModal
-        isOpen={isGoogleSheetsModalOpen}
-        onClose={() => setIsGoogleSheetsModalOpen(false)}
-        actions={actions}
-        onSyncCompleted={(newActions, msg) => {
-          setActions(newActions);
-          saveActionsToStorage(newActions);
-          showToast(msg);
         }}
       />
     </div>
