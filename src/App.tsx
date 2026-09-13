@@ -104,14 +104,11 @@ export default function App() {
       if (!isGoogleSheetConnected()) return;
       try {
         const fresh = await fetchActionsFromGoogleSheet();
-        if (fresh && fresh.length > 0) {
-          if (isMounted) {
-            setActions(fresh);
-            saveActionsToStorage(fresh);
-          }
-        } else {
-          // Sheet is connected but empty on first boot: seed it with the local matrix
-          await pushAllActionsToGoogleSheet(getInitialActions());
+        // An empty Sheet is a valid state (e.g. right after a reset) — just
+        // show zero tasks rather than seeding it with anything.
+        if (isMounted) {
+          setActions(fresh || []);
+          saveActionsToStorage(fresh || []);
         }
       } catch (err) {
         console.warn('Google Sheet sync failed, using local cache:', err);

@@ -7,6 +7,10 @@
  * keep older "*-fix.gs" files from previous rounds, they're superseded.
  *
  * WHAT CHANGED IN THIS VERSION:
+ * - Added CLEAR_ALL_TASKS: wipes all task rows (keeps headers) and resets
+ *   IDCounters back to zero, for a clean-slate reset. Requires the client to
+ *   send confirm: "DELETE_ALL_TASKS" — never wired to a UI button, only
+ *   triggered deliberately. Does not touch the Users sheet.
  * - New task IDs are now department-prefixed (e.g. "PDC-47") and assigned
  *   ATOMICALLY on the server using LockService, in a new "IDCounters" sheet
  *   tab (one row per department, tracking the last-used number). This
@@ -272,6 +276,35 @@ function doPost(e) {
     if (action === 'UPDATE_USER') return doUpdateUser(payload);
     if (action === 'DELETE_USER') return doDeleteUser(payload);
     if (action === 'CHANGE_PASSWORD') return doChangePassword(payload);
+
+    if (action === 'CLEAR_ALL_TASKS') {
+      // Requires an explicit confirmation token so a stray/malformed request
+      // can never wipe the sheet by accident. Clears MasterActionMatrix data
+      // rows and resets IDCounters (new tasks restart at -1 per dept). Does
+      // NOT touch the Users sheet.
+      if (payload.confirm !== 'DELETE_ALL_TASKS') {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Missing or incorrect confirmation token'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+      }
+
+      const counters = getOrCreateIdCountersSheet_();
+      const countersLastRow = counters.getLastRow();
+      if (countersLastRow > 1) {
+        counters.getRange(2, 1, countersLastRow - 1, counters.getLastColumn()).clearContent();
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'All tasks cleared and ID counters reset'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
 
     if (action === 'SYNC_ALL_TASKS') {
       // Full re-sync of already-identified items (from local cache) — IDs

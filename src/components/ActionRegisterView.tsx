@@ -4,7 +4,8 @@ import {
   FilterState, 
   ActionStatus 
 } from '../types';
-import { PLANT_ASSIGNEES_29, isRaisedToOtherDept } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
+import { TASK_DEPARTMENTS, ALL_ASSIGNEES } from '../data/orgStructure';
 import { 
   Search, 
   Sparkles, 
@@ -62,20 +63,12 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   // Today's operational date
   const TODAY_STR = '2026-09-11';
 
-  // Department list
-  const departments = useMemo(() => {
-    const set = new Set<string>();
-    actions.forEach(a => {
-      if (a.dept) set.add(a.dept);
-    });
-    return Array.from(set).sort();
-  }, [actions]);
+  // Department list — the full canonical set, so the filter is populated
+  // even before any tasks exist yet.
+  const departments = TASK_DEPARTMENTS;
 
-  // Assignees list - exactly 29 assignees
-  const assigneesList = useMemo(() => {
-    const list = [...PLANT_ASSIGNEES_29];
-    return list;
-  }, []);
+  // Assignees list — every department's default placeholder + dept head + supervisors
+  const assigneesList = ALL_ASSIGNEES;
 
   // Filter actions
   const filteredActions = useMemo(() => {
@@ -639,7 +632,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
               <option value={25}>25</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
-              <option value={actions.length || 1050}>All ({actions.length})</option>
+              <option value={actions.length}>All ({actions.length})</option>
             </select>
             <span className="text-slate-400">|</span>
             <span>

@@ -128,3 +128,9 @@ export function getAssigneesForDept(deptName: string): string[] {
   const names = entry ? [entry.deptHead, ...entry.supervisors] : [];
   return [getDefaultAssignee(deptName), ...Array.from(new Set(names.filter(Boolean)))];
 }
+
+// Full plant-wide assignee list (every department's default placeholder +
+// dept head + supervisors), deduped — used for the global "Assignee" filter.
+export const ALL_ASSIGNEES: string[] = Array.from(
+  new Set(TASK_DEPARTMENTS.flatMap((dept) => getAssigneesForDept(dept)))
+);

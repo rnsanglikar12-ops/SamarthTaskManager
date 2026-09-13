@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { isGoogleSheetConnected } from '../utils/googleSheetsService';
 import { AuthUser, can } from '../utils/auth';
+import { TASK_DEPARTMENTS } from '../data/orgStructure';
 
 export type NavTab = 'cockpit' | 'matrix' | 'saturday_mom' | 'recurring_pm' | 'cft_handshake' | 'kaizen' | 'dept_leaders';
 
@@ -62,7 +63,7 @@ const TAB_BADGE_CLASSES: Record<TabColor, string> = {
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
-  totalCount = 1050,
+  totalCount = 0,
   completedCount,
   onOpenNewModal,
   onRefresh,
@@ -84,25 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isSpecificDeptSelected = Boolean(currentDept && currentDept !== '' && currentDept !== 'All Departments');
 
-  const deptScopes = [
-    'All Departments',
-    'Quality',
-    'Store',
-    'PDC',
-    'Die Maint',
-    'SPM',
-    'Fettling',
-    'Machine shop-01',
-    'Machine shop-02',
-    'PPC',
-    'MC Maint',
-    'NPD',
-    'Tool Room',
-    'HR',
-    'Account',
-    'Purchase',
-    'Plant Head'
-  ];
+  const deptScopes = ['All Departments', ...TASK_DEPARTMENTS];
 
   const displayScopeName = isSpecificDeptSelected
     ? `Dept: ${currentDept}`
