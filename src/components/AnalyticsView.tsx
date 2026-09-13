@@ -255,8 +255,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                     outerRadius={80}
                     paddingAngle={4}
                     dataKey="value"
-                    cursor="pointer"
-                    onClick={(entry: any) => entry && entry.key && onSelectPriority(entry.key)}
+                    cursor={lockedDept ? "default" : "pointer"}
+                    onClick={(entry: any) => {
+                      if (lockedDept) return;
+                      if (entry && entry.key) onSelectPriority(entry.key);
+                    }}
                   >
                     {priorityData.map((entry) => (
                       <Cell 
@@ -274,9 +277,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
 
           <div className="space-y-2 border-t border-[#334155] pt-3 text-xs">
-            <div 
-              onClick={() => onSelectPriority('A')}
-              className="flex items-center justify-between p-2 rounded-lg bg-[#ef4444]/10 hover:bg-[#ef4444]/20 border border-[#ef4444]/20 cursor-pointer transition-colors"
+            <div
+              onClick={() => { if (!lockedDept) onSelectPriority('A'); }}
+              className={`flex items-center justify-between p-2 rounded-lg bg-[#ef4444]/10 hover:bg-[#ef4444]/20 border border-[#ef4444]/20 transition-colors ${lockedDept ? 'cursor-default' : 'cursor-pointer'}`}
             >
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-[#ef4444]" />
@@ -287,9 +290,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </span>
             </div>
 
-            <div 
-              onClick={() => onSelectPriority('B')}
-              className="flex items-center justify-between p-2 rounded-lg bg-[#38bdf8]/10 hover:bg-[#38bdf8]/20 border border-[#38bdf8]/20 cursor-pointer transition-colors"
+            <div
+              onClick={() => { if (!lockedDept) onSelectPriority('B'); }}
+              className={`flex items-center justify-between p-2 rounded-lg bg-[#38bdf8]/10 hover:bg-[#38bdf8]/20 border border-[#38bdf8]/20 transition-colors ${lockedDept ? 'cursor-default' : 'cursor-pointer'}`}
             >
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-[#38bdf8]" />

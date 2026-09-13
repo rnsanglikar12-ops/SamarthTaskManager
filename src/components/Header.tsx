@@ -1,24 +1,25 @@
 import React, { useState } from 'react';
-import { 
-  MapPin, 
-  RefreshCw, 
-  Link2, 
-  Lock, 
-  Unlock, 
-  Plus, 
-  LayoutGrid, 
-  SlidersHorizontal, 
-  Calendar, 
-  RotateCw, 
-  Users, 
-  Sparkles, 
+import {
+  MapPin,
+  RefreshCw,
+  Lock,
+  Plus,
+  LayoutGrid,
+  SlidersHorizontal,
+  Calendar,
+  RotateCw,
+  Users,
+  Sparkles,
   UserCheck,
   ChevronDown,
   Check,
-  Building,
-  ShieldCheck
+  ShieldCheck,
+  LogOut,
+  KeyRound,
+  UserCog
 } from 'lucide-react';
 import { isGoogleSheetConnected } from '../utils/googleSheetsService';
+import { AuthUser, can } from '../utils/auth';
 
 export type NavTab = 'cockpit' | 'matrix' | 'saturday_mom' | 'recurring_pm' | 'cft_handshake' | 'kaizen' | 'dept_leaders';
 
@@ -29,9 +30,10 @@ interface HeaderProps {
   completedCount: number;
   onOpenNewModal: () => void;
   onSyncSheet?: () => void;
-  onOpenSecretControl?: () => void;
-  onOpenDeptLinks?: () => void;
-  isSecretUnlocked?: boolean;
+  session: AuthUser;
+  onLogout: () => void;
+  onOpenUserManagement: () => void;
+  onOpenChangePassword: () => void;
   currentDept?: string;
   onSelectDept?: (dept: string) => void;
   isRestrictedHodMode?: boolean;
@@ -46,17 +48,18 @@ export const Header: React.FC<HeaderProps> = ({
   completedCount,
   onOpenNewModal,
   onSyncSheet,
-  onOpenSecretControl,
-  onOpenDeptLinks,
-  isSecretUnlocked = false,
+  session,
+  onLogout,
+  onOpenUserManagement,
+  onOpenChangePassword,
   currentDept = '',
   onSelectDept,
   isRestrictedHodMode = false,
   lockedDept = null,
   cftCount
 }) => {
-  const [isLocked, setIsLocked] = useState(true);
   const [showDeptMenu, setShowDeptMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
@@ -227,47 +230,59 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* HOD Direct Links (Requirement 7: Strictly visible ONLY in All Departments Executive Scope or when Secret Unlocked - NEVER in individual dept selections) */}
-          {(!isSpecificDeptSelected || isSecretUnlocked) && !isRestrictedHodMode && onOpenDeptLinks && (
+          {/* Signed-in User Menu */}
+          <div className="relative">
             <button
-              onClick={onOpenDeptLinks}
-              className={`border text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors ${
-                isSecretUnlocked
-                  ? 'border-blue-300 bg-blue-50/80 text-blue-700 hover:bg-blue-100'
-                  : 'border-slate-200 hover:border-blue-300 bg-white hover:bg-blue-50/50 text-slate-700'
-              }`}
-              title="Executive Access: Department Head Direct Links (Protected by Master Passcode)"
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors text-slate-700"
+              title={`Signed in as ${session.displayName} (${session.role})`}
             >
-              <Link2 className="w-3.5 h-3.5 text-blue-600" />
-              <span>HOD Links</span>
-              {!isSecretUnlocked && <Lock className="w-3 h-3 text-amber-500" />}
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+              <span className="max-w-[120px] truncate">{session.displayName}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
-          )}
 
-          {/* Master Secret Control Button (Requirement 8: Only with Mentor via Password - Hidden for specific department/HOD users) */}
-          {(!isSpecificDeptSelected || isSecretUnlocked) && !isRestrictedHodMode && (
-            <button
-              onClick={onOpenSecretControl}
-              className={`border text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-all ${
-                isSecretUnlocked 
-                  ? 'border-emerald-400 bg-emerald-50 text-emerald-800' 
-                  : 'border-slate-200 hover:border-amber-300 bg-white hover:bg-amber-50/40 text-slate-700'
-              }`}
-              title={isSecretUnlocked ? "Master Secret Control Active (Mr. Sanglikar)" : "Master Secret Control (Password Required)"}
-            >
-              {isSecretUnlocked ? (
-                <>
-                  <Unlock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Control (Active)</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Secret Control</span>
-                </>
-              )}
-            </button>
-          )}
+            {showUserMenu && (
+              <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-50 text-xs text-slate-700 animate-in fade-in slide-in-from-top-1">
+                <div className="px-3 py-1.5 border-b border-slate-100">
+                  <div className="font-bold text-slate-900">{session.displayName}</div>
+                  <div className="text-[11px] text-slate-500">{session.role}{session.department ? ` • ${session.department}` : ' • Plant-wide'}</div>
+                </div>
+                {can(session, 'manageUsers') && (
+                  <button
+                    onClick={() => {
+                      onOpenUserManagement();
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors"
+                  >
+                    <UserCog className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Manage Users</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    onOpenChangePassword();
+                    setShowUserMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Change Password</span>
+                </button>
+                <button
+                  onClick={() => {
+                    onLogout();
+                    setShowUserMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-red-50 text-red-600 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* New Task Blue Button */}
           <button

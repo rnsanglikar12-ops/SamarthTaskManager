@@ -1,30 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { SAMARTH_ORG_STRUCTURE, MENTOR_NAME } from '../data/orgStructure';
 import { ActionItem } from '../types';
-import { 
-  Building2, 
-  Users, 
-  Search, 
-  BarChart3, 
-  Layers, 
-  CheckCircle2, 
-  Clock, 
-  AlertTriangle, 
-  TrendingUp, 
-  Link2, 
+import {
+  Building2,
+  Users,
+  Search,
+  BarChart3,
+  Layers,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  TrendingUp,
   ArrowRight,
   ShieldCheck,
   Award,
   ChevronDown,
   Lock
 } from 'lucide-react';
-import { isSecretControlUnlocked } from '../utils/security';
-import { DeptHeadLinksModal } from './DeptHeadLinksModal';
 
 interface DepartmentDirectoryViewProps {
   actions: ActionItem[];
   onSelectDepartment: (deptName: string) => void;
-  onOpenSecretControl?: () => void;
   lockedDept?: string | null;
 }
 
@@ -33,7 +29,6 @@ type ViewTab = 'graphical' | 'split' | 'roster';
 export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = ({
   actions,
   onSelectDepartment,
-  onOpenSecretControl = () => {},
   lockedDept = null
 }) => {
   const [activeViewTab, setActiveViewTab] = useState<ViewTab>('graphical');
@@ -41,7 +36,6 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
   const [selectedVelocityDept, setSelectedVelocityDept] = useState(
     lockedDept || 'All Departments (Plant-wide)'
   );
-  const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
 
   // Department statistics
   const deptStats = useMemo(() => {
@@ -210,18 +204,6 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
             </button>
           </div>
 
-          {/* Department Head Direct Links Generator Button (Restricted to MD & Plant Head: Not accessible in specific department selections without unlock) */}
-          {(isSecretControlUnlocked() || selectedVelocityDept === 'All Departments (Plant-wide)') && (
-            <button
-              onClick={() => setIsLinksModalOpen(true)}
-              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors"
-              title="Access Restricted Department Head Links (Password Protected)"
-            >
-              <Link2 className="w-3.5 h-3.5" />
-              <span>HOD Direct Links</span>
-              {!isSecretControlUnlocked() && <Lock className="w-3 h-3 text-amber-600" />}
-            </button>
-          )}
         </div>
       </div>
 
@@ -607,14 +589,6 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
           </div>
         </div>
       )}
-
-      {/* Restricted Department Head Links Modal */}
-      <DeptHeadLinksModal
-        isOpen={isLinksModalOpen}
-        onClose={() => setIsLinksModalOpen(false)}
-        onSelectDept={onSelectDepartment}
-        onOpenSecretControl={onOpenSecretControl}
-      />
     </div>
   );
 };

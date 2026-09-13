@@ -222,6 +222,95 @@ export async function testGoogleSheetConnection(testUrl?: string): Promise<{ suc
 }
 
 /**
+ * Authenticate against the Users tab. Only ever sends/receives a password hash,
+ * never plaintext. Returns null on invalid credentials or if no sheet is connected.
+ */
+export async function loginUser(
+  username: string,
+  passwordHash: string
+): Promise<{ username: string; displayName: string; role: string; department: string | null; mustChangePassword: boolean } | null> {
+  if (!isGoogleSheetConnected()) throw new Error('Google Sheet Web App URL is not configured.');
+  const result = await sendToAppsScript({ action: 'LOGIN', username, passwordHash });
+  if (result && result.status === 'success' && result.user) {
+    return result.user;
+  }
+  return null;
+}
+
+export interface AppsScriptUserRecord {
+  username: string;
+  displayName: string;
+  role: string;
+  department: string | null;
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
+/**
+ * Fetch the full user list (password hashes are never included in the response).
+ * Intended for the Admin user-management panel only.
+ */
+export async function fetchUsers(): Promise<AppsScriptUserRecord[]> {
+  const url = getGoogleSheetUrl();
+  if (!url) throw new Error('Google Sheet Web App URL is not configured.');
+
+  const res = await fetch(`${url}?action=FETCH_USERS&_t=${Date.now()}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch users: HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  if (data && Array.isArray(data.users)) {
+    return data.users;
+  }
+  throw new Error('Unexpected data format received while fetching users.');
+}
+
+export async function createUser(user: {
+  username: string;
+  displayName: string;
+  passwordHash: string;
+  role: string;
+  department: string | null;
+}): Promise<boolean> {
+  const result = await sendToAppsScript({ action: 'CREATE_USER', data: user });
+  return result?.status === 'success';
+}
+
+export async function updateUser(user: {
+  username: string;
+  displayName?: string;
+  role?: string;
+  department?: string | null;
+}): Promise<boolean> {
+  const result = await sendToAppsScript({ action: 'UPDATE_USER', data: user });
+  return result?.status === 'success';
+}
+
+export async function deleteUser(username: string): Promise<boolean> {
+  const result = await sendToAppsScript({ action: 'DELETE_USER', username });
+  return result?.status === 'success';
+}
+
+/**
+ * Change a user's password. Self-service calls (user setting their own password)
+ * clear mustChangePassword; admin resets pass `forceChangeOnNextLogin: true` so
+ * the temp password must be replaced at the user's next login.
+ */
+export async function changePassword(
+  username: string,
+  newPasswordHash: string,
+  forceChangeOnNextLogin = false
+): Promise<boolean> {
+  const result = await sendToAppsScript({
+    action: 'CHANGE_PASSWORD',
+    username,
+    newPasswordHash,
+    mustChangePassword: forceChangeOnNextLogin
+  });
+  return result?.status === 'success';
+}
+
+/**
  * Generates the clean Google Apps Script code ready to be pasted into the user's spreadsheet
  */
 export function getAppsScriptCode(): string {

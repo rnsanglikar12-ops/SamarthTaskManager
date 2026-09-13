@@ -15,13 +15,7 @@ import {
   Check,
   AlertCircle
 } from 'lucide-react';
-import { 
-  canReviseDeadline, 
-  canDeleteAction, 
-  getActiveRole, 
-  isSecretControlUnlocked, 
-  ExecutiveRole 
-} from '../utils/security';
+import { AuthUser, can } from '../utils/auth';
 import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
 
 interface ActionDetailModalProps {
@@ -29,11 +23,8 @@ interface ActionDetailModalProps {
   onClose: () => void;
   onSave: (updated: ActionItem) => void;
   onDelete?: (id: number) => void;
-  onOpenSecretControl?: () => void;
   currentDept?: string;
-  currentRole?: ExecutiveRole;
-  isRestrictedHodMode?: boolean;
-  isSecretUnlocked?: boolean;
+  session: AuthUser | null;
 }
 
 export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
@@ -41,11 +32,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   onClose,
   onSave,
   onDelete,
-  onOpenSecretControl,
   currentDept = '',
-  currentRole,
-  isRestrictedHodMode = false,
-  isSecretUnlocked = false
+  session
 }) => {
   if (!action) return null;
 
@@ -68,13 +56,11 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const [reworkReason, setReworkReason] = useState('');
   const [handshakeNotice, setHandshakeNotice] = useState<string | null>(null);
 
-  const activeRole = currentRole || getActiveRole();
-  const unlocked = isSecretUnlocked || isSecretControlUnlocked();
-
   // Role permissions
-  const hasReviseAuthority = canReviseDeadline(activeRole, unlocked);
-  const hasDeleteAuthority = canDeleteAction(activeRole, unlocked);
-  const isExecutive = unlocked || activeRole === 'Plant Head' || activeRole === 'MD' || activeRole === 'Secret Admin';
+  const hasReviseAuthority = can(session, 'reviseDeadline');
+  const hasDeleteAuthority = can(session, 'deleteTask');
+  const canEditTask = can(session, 'editOwnDept', action);
+  const isExecutive = !!session && !session.department; // plant-wide role: PlantHead / MD / Admin
 
   // Handshake detection
   const originatorDept = action.originatorDept || 'Store';
@@ -551,7 +537,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               <select
                 value={status}
                 onChange={(e) => handleStatusChange(e.target.value as ActionStatus)}
-                className="w-full py-2 px-3 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+                disabled={!canEditTask}
+                className="w-full py-2 px-3 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 focus:border-blue-500 outline-none shadow-2xs disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="Pending">Pending / Open</option>
                 <option value="In process">In process / Action Ongoing</option>
@@ -571,7 +558,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full py-2 px-3 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 focus:border-blue-500 outline-none shadow-2xs"
+                disabled={!canEditTask}
+                className="w-full py-2 px-3 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 focus:border-blue-500 outline-none shadow-2xs disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <option value="A">Priority A (High Severity / Critical)</option>
                 <option value="B">Priority B (Standard / Routine)</option>
@@ -589,18 +577,20 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               value={actionNotes}
               onChange={(e) => setActionNotes(e.target.value)}
               placeholder="Record immediate containment, machine adjustment, root cause or supplier verification..."
-              className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 outline-none shadow-2xs"
+              disabled={!canEditTask}
+              className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 outline-none shadow-2xs disabled:bg-slate-100 disabled:text-slate-400"
             />
           </div>
 
           {/* Convert to Kaizen Toggle */}
           <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-2">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input 
+              <input
                 type="checkbox"
                 checked={isKaizen}
                 onChange={(e) => setIsKaizen(e.target.checked)}
-                className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                disabled={!canEditTask}
+                className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 disabled:opacity-50"
               />
               <span className="font-bold text-emerald-800 text-xs flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
@@ -624,7 +614,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         <div className="p-4 border-t border-slate-200 bg-slate-50/80 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             {/* Handshake Completion vs Submission Button */}
-            {isHandshake ? (
+            {canEditTask && (isHandshake ? (
               isOriginator ? (
                 /* Originator or Plant Head: Can complete the handshake task */
                 status !== 'Completed' && (
@@ -673,7 +663,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                   <span>Mark Completed</span>
                 </button>
               )
-            )}
+            ))}
 
             {/* Delete button: Strictly visible ONLY if user has executive delete authority! (Requirement 1) */}
             {hasDeleteAuthority && (
@@ -697,14 +687,16 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             >
               Cancel
             </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#1d64ec] hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
-            >
-              <Save className="w-4 h-4 stroke-[2.5]" />
-              <span>Save Updates</span>
-            </button>
+            {canEditTask && (
+              <button
+                type="button"
+                onClick={handleSave}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#1d64ec] hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+              >
+                <Save className="w-4 h-4 stroke-[2.5]" />
+                <span>Save Updates</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

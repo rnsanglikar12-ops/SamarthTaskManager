@@ -1,22 +1,24 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ActionItem } from '../types';
-import { 
-  Sparkles, 
-  Plus, 
-  Search, 
-  ArrowUpDown, 
-  Camera, 
-  CheckCircle2, 
-  Printer, 
+import {
+  Sparkles,
+  Plus,
+  Search,
+  ArrowUpDown,
+  Camera,
+  CheckCircle2,
+  Printer,
   Filter,
   Image as ImageIcon,
   ShieldAlert,
   Clock,
   Layers,
-  Check
+  Check,
+  Lock
 } from 'lucide-react';
 import { OnePointSheetModal } from './OnePointSheetModal';
 import { SAMARTH_ORG_STRUCTURE } from '../data/orgStructure';
+import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
 
 interface KaizenHubViewProps {
   actions: ActionItem[];
@@ -42,6 +44,12 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState(lockedDept || '');
+
+  // Keep in sync if the signed-in user's locked department ever changes
+  // (e.g. a different user logs in on the same session).
+  useEffect(() => {
+    setSelectedDept(lockedDept || '');
+  }, [lockedDept]);
   const [selectedChampion, setSelectedChampion] = useState('');
   const [activeCategory, setActiveCategory] = useState<KaizenCategoryFilter>('all');
   const [sheetModalAction, setSheetModalAction] = useState<ActionItem | null>(null);
@@ -88,8 +96,13 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
         if (!matchesSearch) return false;
       }
 
-      // Department
-      if (selectedDept && item.dept !== selectedDept) return false;
+      // Department (handshake-aware: match target dept OR originator dept, same as Master Matrix)
+      if (selectedDept) {
+        const matchesHandshake = item.originatorDept && isRaisedToOtherDept(item.originatorDept, item.dept)
+          ? (item.dept === selectedDept || item.originatorDept === selectedDept)
+          : item.dept === selectedDept;
+        if (!matchesHandshake) return false;
+      }
 
       // Champion / Owner
       if (selectedChampion && !item.owner.toLowerCase().includes(selectedChampion.toLowerCase())) return false;

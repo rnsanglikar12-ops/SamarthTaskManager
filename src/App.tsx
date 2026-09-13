@@ -1,16 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ActionItem, FilterState, SentinelStats, ActionStatus } from './types';
-import { 
-  getInitialActions, 
-  saveActionsToStorage, 
-  loadBaseSentinelActions,
-  isRaisedToOtherDept 
+import {
+  getInitialActions,
+  saveActionsToStorage,
+  isRaisedToOtherDept
 } from './data/sentinelDataLoader';
 import {
   subscribeToTabBroadcast,
   broadcastLocalUpdate
 } from './utils/syncService';
-import { exportActionsToCsv, exportActionsToJson } from './utils/exportUtils';
 import { Header, NavTab } from './components/Header';
 import { StatsOverview } from './components/StatsOverview';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -19,8 +17,9 @@ import { DepartmentDirectoryView } from './components/DepartmentDirectoryView';
 import { KaizenHubView } from './components/KaizenHubView';
 import { ActionDetailModal } from './components/ActionDetailModal';
 import { NewActionModal } from './components/NewActionModal';
-import { SecretControlModal } from './components/SecretControlModal';
-import { DeptHeadLinksModal } from './components/DeptHeadLinksModal';
+import { UserManagementModal } from './components/UserManagementModal';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { LoginScreen } from './components/LoginScreen';
 import {
   isGoogleSheetConnected,
   updateActionInGoogleSheet,
@@ -29,22 +28,24 @@ import {
   fetchActionsFromGoogleSheet,
   pushAllActionsToGoogleSheet
 } from './utils/googleSheetsService';
-import { isSecretControlUnlocked, setActiveRole, getActiveRole } from './utils/security';
-import { CheckCircle2, AlertCircle, Sparkles, Calendar, RotateCw, Users, Crown, Lock } from 'lucide-react';
+import { AuthUser, can, isDeptInScope, getSession, setSession as persistSession, clearSession } from './utils/auth';
+import { CheckCircle2, Calendar, RotateCw, Users, Crown, Lock } from 'lucide-react';
 
 export default function App() {
+  const [session, setSession] = useState<AuthUser | null>(() => getSession());
   const [actions, setActions] = useState<ActionItem[]>(() => getInitialActions());
   // Default to 'matrix' (Master Matrix) to match the provided screenshot
   const [activeTab, setActiveTab] = useState<NavTab>('matrix');
   const [selectedAction, setSelectedAction] = useState<ActionItem | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState<boolean>(false);
-  const [isSecretModalOpen, setIsSecretModalOpen] = useState<boolean>(false);
-  const [isDeptLinksModalOpen, setIsDeptLinksModalOpen] = useState<boolean>(false);
-  const [isSecretUnlocked, setIsSecretUnlocked] = useState<boolean>(() => isSecretControlUnlocked());
+  const [isUserMgmtModalOpen, setIsUserMgmtModalOpen] = useState<boolean>(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isRestrictedHodMode, setIsRestrictedHodMode] = useState<boolean>(false);
-  const [lockedDept, setLockedDept] = useState<string | null>(null);
-  const [currentRole, setCurrentRole] = useState<string>(() => getActiveRole());
+
+  // Department scoping is derived directly from the signed-in session — there
+  // is no more URL-param or password-bypass path to acquire a locked dept.
+  const lockedDept = session?.department ?? null;
+  const isRestrictedHodMode = lockedDept !== null;
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -77,40 +78,19 @@ export default function App() {
     });
   }, [lockedDept]);
 
-  // Handle URL query parameters for direct HOD links and Plant Head role
+  // Lock the department filter to the signed-in user's department as soon as
+  // they log in (or when a fresh session with a department loads on mount).
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const deptParam = params.get('dept');
-      const accessParam = params.get('access');
-      const roleParam = params.get('role');
-
-      // Check if opened as Plant Head
-      if (roleParam === 'planthead' || (deptParam?.toLowerCase() === 'plant head' && accessParam !== 'hod')) {
-        setActiveRole('Plant Head');
-        setCurrentRole('Plant Head');
-        setIsRestrictedHodMode(false);
-        setLockedDept(null);
-        showToast('Plant Head Executive Portal Activated (Awari B.) — Full Plant Access');
-        // If specific department is not selected, show all departments across plant
-        if (deptParam && deptParam !== 'Plant Head' && deptParam !== 'All') {
-          setFilters(prev => ({ ...prev, dept: deptParam }));
-        } else {
-          setFilters(prev => ({ ...prev, dept: '' }));
-        }
-        return;
-      }
-
-      if (deptParam && deptParam !== 'All') {
-        setLockedDept(deptParam);
-        setIsRestrictedHodMode(true);
-        setFilters(prev => ({ ...prev, dept: deptParam }));
-        showToast(`🔒 Department View Locked to ${deptParam}`);
-      } else if (accessParam === 'hod') {
-        setIsRestrictedHodMode(true);
-      }
+    if (lockedDept) {
+      setFilters(prev => ({ ...prev, dept: lockedDept }));
     }
-  }, [showToast]);
+  }, [lockedDept]);
+
+  const handleLogout = useCallback(() => {
+    clearSession();
+    setSession(null);
+    setFilters(prev => ({ ...prev, dept: '' }));
+  }, []);
 
   // Real-Time Task Synchronization across links, devices, and browser tabs
   // Backed entirely by the connected Google Sheet — no app server involved.
@@ -214,6 +194,15 @@ export default function App() {
     };
   }, []);
 
+  // Every view is scoped to what the signed-in user is actually allowed to see:
+  // plant-wide roles (PlantHead/MD/Admin) see everything, department-scoped
+  // roles (DeptHead/Viewer) see tasks their department owns OR raised to
+  // another department (handshake visibility in both directions).
+  const visibleActions = useMemo(() => {
+    if (!session || !session.department) return actions;
+    return actions.filter(a => isDeptInScope(session, a));
+  }, [actions, session]);
+
   // Compute live KPI stats
   const stats: SentinelStats = useMemo(() => {
     let completed = 0;
@@ -228,7 +217,7 @@ export default function App() {
 
     const today = '2026-09-11';
 
-    actions.forEach(a => {
+    visibleActions.forEach(a => {
       if (a.status === 'Completed') completed++;
       else if (a.status === 'In process') inProcess++;
       else if (a.status === 'Under Verification') underVerification++;
@@ -245,7 +234,7 @@ export default function App() {
       }
     });
 
-    const total = actions.length;
+    const total = visibleActions.length;
     const complianceRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     return {
@@ -261,10 +250,15 @@ export default function App() {
       complianceRate,
       kaizenCount
     };
-  }, [actions]);
+  }, [visibleActions]);
 
   // Update status directly & sync across links
   const handleUpdateStatus = useCallback((id: number, newStatus: ActionStatus) => {
+    const target = actions.find(a => a.id === id);
+    if (!target || !can(session, 'editOwnDept', target)) {
+      showToast('Access denied: you do not have permission to update this task.');
+      return;
+    }
     let updatedItem: ActionItem | null = null;
     setActions(prev => {
       const next = prev.map(item => {
@@ -284,10 +278,14 @@ export default function App() {
       }
     }
     showToast(`Task #${id} status changed to "${newStatus}" & synced`);
-  }, [showToast]);
+  }, [actions, session, showToast]);
 
-  // Delete item (Authority with Plant Head / Secret Control) & sync across links
+  // Delete item (Plant Head / MD / Admin authority only) & sync across links
   const handleDeleteAction = useCallback((id: number) => {
+    if (!can(session, 'deleteTask')) {
+      showToast('Access denied: you do not have permission to delete tasks.');
+      return;
+    }
     setActions(prev => {
       const next = prev.filter(item => item.id !== id);
       saveActionsToStorage(next);
@@ -298,11 +296,15 @@ export default function App() {
     if (isGoogleSheetConnected()) {
       deleteActionInGoogleSheet(id);
     }
-    showToast(`Task #${id} permanently deleted under Plant Head authority`);
-  }, [showToast]);
+    showToast(`Task #${id} permanently deleted`);
+  }, [session, showToast]);
 
   // Save full edited action & sync across links
   const handleSaveAction = useCallback((updated: ActionItem) => {
+    if (!can(session, 'editOwnDept', updated)) {
+      showToast('Access denied: you do not have permission to edit this task.');
+      return;
+    }
     setActions(prev => {
       const next = prev.map(item => item.id === updated.id ? updated : item);
       saveActionsToStorage(next);
@@ -313,10 +315,14 @@ export default function App() {
       updateActionInGoogleSheet(updated);
     }
     showToast(`Task #${updated.id} successfully updated & synced across links`);
-  }, [showToast]);
+  }, [session, showToast]);
 
   // Add new item & sync across links
   const handleAddAction = useCallback((newItemData: Omit<ActionItem, 'id'>) => {
+    if (!can(session, 'createTask')) {
+      showToast('Access denied: you do not have permission to create tasks.');
+      return;
+    }
     const nextId = actions.reduce((max, a) => Math.max(max, a.id), 0) + 1;
     const newItem: ActionItem = {
       ...newItemData,
@@ -332,13 +338,13 @@ export default function App() {
       createActionInGoogleSheet(newItem);
     }
     showToast(`Created new Action #${nextId} & broadcasted to all links`);
-  }, [actions, showToast]);
+  }, [actions, session, showToast]);
 
   // Pull the latest matrix from the connected Google Sheet, or push the local
   // matrix as the seed if the sheet is empty.
   const handleSyncSheet = useCallback(async () => {
     if (!isGoogleSheetConnected()) {
-      showToast('Connect a Google Sheet first (Sheets icon) to enable cloud sync.');
+      showToast('Google Sheet backend is not configured. Contact your administrator.');
       return;
     }
     try {
@@ -356,12 +362,15 @@ export default function App() {
     }
   }, [actions, showToast]);
 
-  // Specific filtered lists for dedicated tabs
-  const momActions = useMemo(() => actions.filter(a => a.isMOM), [actions]);
-  const recurringActions = useMemo(() => actions.filter(a => a.recurrence !== 'One-Time'), [actions]);
+  // Specific filtered lists for dedicated tabs — all scoped to visibleActions
+  const momActions = useMemo(() => visibleActions.filter(a => a.isMOM), [visibleActions]);
+  const recurringActions = useMemo(() => visibleActions.filter(a => a.recurrence !== 'One-Time'), [visibleActions]);
   // CFT Handshake: strictly tasks raised to another department only (originatorDept != dept)
-  const cftActions = useMemo(() => actions.filter(a => isRaisedToOtherDept(a.originatorDept, a.dept)), [actions]);
-  const kaizenActions = useMemo(() => actions.filter(a => a.isKaizen), [actions]);
+  const cftActions = useMemo(() => visibleActions.filter(a => isRaisedToOtherDept(a.originatorDept, a.dept)), [visibleActions]);
+
+  if (!session) {
+    return <LoginScreen onLoginSuccess={setSession} />;
+  }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
@@ -382,9 +391,10 @@ export default function App() {
         cftCount={cftActions.length}
         onOpenNewModal={() => setIsNewModalOpen(true)}
         onSyncSheet={handleSyncSheet}
-        onOpenSecretControl={() => setIsSecretModalOpen(true)}
-        onOpenDeptLinks={() => setIsDeptLinksModalOpen(true)}
-        isSecretUnlocked={isSecretUnlocked}
+        session={session}
+        onLogout={handleLogout}
+        onOpenUserManagement={() => setIsUserMgmtModalOpen(true)}
+        onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
         currentDept={filters.dept}
         onSelectDept={(dept) => {
           if (lockedDept && dept !== lockedDept) {
@@ -397,66 +407,35 @@ export default function App() {
         lockedDept={lockedDept}
       />
 
-      {/* Restricted HOD Mode Notice */}
+      {/* Restricted Department Mode Notice */}
       {isRestrictedHodMode && (
-        <div className="bg-amber-50/95 border-b border-amber-300 px-4 sm:px-8 py-2.5 flex items-center justify-between text-xs text-amber-950 animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 font-bold text-[10px] tracking-wide uppercase flex items-center gap-1 shadow-2xs">
-              <Lock className="w-3 h-3 text-amber-800" />
-              Locked HOD Access: {lockedDept || filters.dept}
-            </span>
-            <span>
-              Direct link mode active for <strong>{lockedDept || filters.dept}</strong>. Inter-departmental links and administrative tools are restricted.
-            </span>
-          </div>
-          {isSecretUnlocked && (
-            <button
-              onClick={() => {
-                setIsRestrictedHodMode(false);
-                setLockedDept(null);
-                setFilters(prev => ({ ...prev, dept: '' }));
-                if (typeof window !== 'undefined') {
-                  window.history.replaceState({}, document.title, window.location.pathname);
-                }
-              }}
-              className="text-blue-700 hover:text-blue-900 font-bold underline text-xs ml-4 shrink-0"
-            >
-              Unlock Master View
-            </button>
-          )}
+        <div className="bg-amber-50/95 border-b border-amber-300 px-4 sm:px-8 py-2.5 flex items-center gap-2 text-xs text-amber-950 animate-in fade-in">
+          <span className="px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 font-bold text-[10px] tracking-wide uppercase flex items-center gap-1 shadow-2xs">
+            <Lock className="w-3 h-3 text-amber-800" />
+            {session.role} Access: {lockedDept}
+          </span>
+          <span>
+            Signed in as <strong>{session.displayName}</strong>. View is locked to {lockedDept} (and tasks {lockedDept} has raised to other departments).
+          </span>
         </div>
       )}
 
-      {/* Plant Head Executive Active Banner */}
-      {currentRole === 'Plant Head' && !isRestrictedHodMode && (
-        <div className="bg-gradient-to-r from-amber-50 via-emerald-50 to-blue-50 border-b border-amber-200 px-4 sm:px-8 py-2 flex items-center justify-between text-xs text-slate-800 animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 font-bold text-[10px] tracking-wide uppercase flex items-center gap-1 shadow-2xs">
-              <Crown className="w-3 h-3 text-amber-800" />
-              Plant Head Executive Portal
-            </span>
-            <span>
-              Active as <strong>Awari B. (Plant Head)</strong> • Full plant oversight active • Target date revision & task deletion authorized.
-            </span>
-          </div>
-          <button
-            onClick={() => {
-              setActiveRole('Viewer');
-              setCurrentRole('Viewer');
-              if (typeof window !== 'undefined') {
-                window.history.replaceState({}, document.title, window.location.pathname);
-              }
-            }}
-            className="text-slate-600 hover:text-slate-900 font-semibold underline text-xs ml-4 shrink-0"
-          >
-            Exit Plant Head Mode
-          </button>
+      {/* Executive Session Banner */}
+      {!isRestrictedHodMode && (session.role === 'PlantHead' || session.role === 'MD' || session.role === 'Admin') && (
+        <div className="bg-gradient-to-r from-amber-50 via-emerald-50 to-blue-50 border-b border-amber-200 px-4 sm:px-8 py-2 flex items-center gap-2 text-xs text-slate-800 animate-in fade-in">
+          <span className="px-2 py-0.5 rounded bg-amber-200/90 text-amber-950 font-bold text-[10px] tracking-wide uppercase flex items-center gap-1 shadow-2xs">
+            <Crown className="w-3 h-3 text-amber-800" />
+            {session.role} Portal
+          </span>
+          <span>
+            Signed in as <strong>{session.displayName}</strong> • Full plant oversight active.
+          </span>
         </div>
       )}
 
       {/* Main Content Area */}
       <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-5">
-        
+
         {/* Cockpit View (Executive Analytics & KPI Cards) */}
         {activeTab === 'cockpit' && (
           <div className="space-y-6">
@@ -470,7 +449,7 @@ export default function App() {
               }}
             />
             <AnalyticsView
-              actions={actions}
+              actions={visibleActions}
               lockedDept={lockedDept}
               onSelectDept={(dept) => {
                 if (lockedDept && dept !== lockedDept) {
@@ -481,6 +460,7 @@ export default function App() {
                 setActiveTab('matrix');
               }}
               onSelectPriority={(priority) => {
+                if (lockedDept) return;
                 setGuardedFilters(prev => ({ ...prev, priority }));
                 setActiveTab('matrix');
               }}
@@ -491,7 +471,7 @@ export default function App() {
         {/* Master Matrix View (Matches screenshot directly) */}
         {activeTab === 'matrix' && (
           <ActionRegisterView
-            actions={actions}
+            actions={visibleActions}
             filters={filters}
             setFilters={setGuardedFilters}
             onOpenDetail={(action) => setSelectedAction(action)}
@@ -613,7 +593,7 @@ export default function App() {
         {/* Kaizen / DSI Tab (52 items) */}
         {activeTab === 'kaizen' && (
           <KaizenHubView
-            actions={actions}
+            actions={visibleActions}
             onOpenDetail={(action) => setSelectedAction(action)}
             onOpenNewModal={() => setIsNewModalOpen(true)}
             lockedDept={lockedDept}
@@ -623,7 +603,7 @@ export default function App() {
         {/* Dept Leaders & 4-V Tab */}
         {activeTab === 'dept_leaders' && (
           <DepartmentDirectoryView
-            actions={actions}
+            actions={visibleActions}
             lockedDept={lockedDept}
             onSelectDepartment={(dept) => {
               if (lockedDept && dept !== lockedDept) {
@@ -633,7 +613,6 @@ export default function App() {
               setGuardedFilters(prev => ({ ...prev, dept }));
               setActiveTab('matrix');
             }}
-            onOpenSecretControl={() => setIsSecretModalOpen(true)}
           />
         )}
       </main>
@@ -647,7 +626,7 @@ export default function App() {
           <div className="flex items-center gap-3 text-slate-500 text-[11px]">
             <span className="text-emerald-700 font-semibold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Live Matrix v4.2.1 • Cloud Synced
+              Live Matrix v5.0 • Cloud Synced
             </span>
             <span>•</span>
             <span>IATF 16949:2016 Certified</span>
@@ -657,17 +636,14 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Action Detail Modal (with Plant Head date revision & deletion controls and Handshake verification) */}
+      {/* Action Detail Modal (with Plant Head/MD/Admin date revision & deletion controls and Handshake verification) */}
       <ActionDetailModal
         action={selectedAction}
         onClose={() => setSelectedAction(null)}
         onSave={handleSaveAction}
         onDelete={handleDeleteAction}
-        onOpenSecretControl={() => setIsSecretModalOpen(true)}
         currentDept={filters.dept}
-        currentRole={currentRole}
-        isRestrictedHodMode={isRestrictedHodMode}
-        isSecretUnlocked={isSecretUnlocked}
+        session={session}
       />
 
       {/* New Action Item Modal */}
@@ -676,36 +652,23 @@ export default function App() {
         onClose={() => setIsNewModalOpen(false)}
         onAdd={handleAddAction}
         nextId={actions.reduce((max, a) => Math.max(max, a.id), 0) + 1}
+        lockedDept={lockedDept}
       />
 
-      {/* Secret Control Modal (Requirement 8) */}
-      <SecretControlModal
-        isOpen={isSecretModalOpen}
-        onClose={() => {
-          setIsSecretModalOpen(false);
-          setIsSecretUnlocked(isSecretControlUnlocked());
-        }}
-        onRoleChanged={() => {
-          setIsSecretUnlocked(isSecretControlUnlocked());
-        }}
-      />
+      {/* User Management Modal (Admin only) */}
+      {can(session, 'manageUsers') && (
+        <UserManagementModal
+          isOpen={isUserMgmtModalOpen}
+          onClose={() => setIsUserMgmtModalOpen(false)}
+          currentUsername={session.username}
+        />
+      )}
 
-      {/* Department Head Restricted Direct Links Modal (Requirement 7) */}
-      <DeptHeadLinksModal
-        isOpen={isDeptLinksModalOpen}
-        onClose={() => setIsDeptLinksModalOpen(false)}
-        onSelectDept={(dept) => {
-          if (lockedDept && dept !== lockedDept) {
-            showToast(`Access Restricted: Locked to ${lockedDept}.`);
-            return;
-          }
-          setGuardedFilters(prev => ({ ...prev, dept }));
-          setActiveTab('matrix');
-        }}
-        onOpenSecretControl={() => {
-          setIsDeptLinksModalOpen(false);
-          setIsSecretModalOpen(true);
-        }}
+      {/* Self-Service Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
+        username={session.username}
       />
     </div>
   );

@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ActionItem, Priority, Recurrence } from '../types';
 import { SAMARTH_PLANT_ASSIGNEES } from '../data/sentinelDataLoader';
-import { 
-  X, 
-  Plus, 
-  Camera, 
-  Upload, 
+import {
+  X,
+  Plus,
+  Camera,
+  Upload,
   Calendar,
   CheckSquare,
   AlertTriangle,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  Lock
 } from 'lucide-react';
 
 interface NewActionModalProps {
@@ -18,13 +19,15 @@ interface NewActionModalProps {
   onClose: () => void;
   onAdd: (newItem: Omit<ActionItem, 'id'>) => void;
   nextId: number;
+  lockedDept?: string | null;
 }
 
 export const NewActionModal: React.FC<NewActionModalProps> = ({
   isOpen,
   onClose,
   onAdd,
-  nextId
+  nextId,
+  lockedDept = null
 }) => {
   if (!isOpen) return null;
 
@@ -36,9 +39,17 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   const [recurrenceOption, setRecurrenceOption] = useState<string>('One-Time Action');
   const [machineEqNo, setMachineEqNo] = useState('PDC-02');
   const [targetDeadline, setTargetDeadline] = useState('2026-09-18');
-  const [dept, setDept] = useState('Quality');
+  const [dept, setDept] = useState(lockedDept || 'Quality');
   const [owner, setOwner] = useState(SAMARTH_PLANT_ASSIGNEES[0] || 'Awari B');
   const [problemPhoto, setProblemPhoto] = useState<string>('');
+
+  // Department-scoped users (DeptHead) can only create tasks for their own department.
+  useEffect(() => {
+    if (lockedDept) {
+      setDept(lockedDept);
+      setIsBroadcast(false);
+    }
+  }, [lockedDept]);
 
   const departments = [
     'Quality',
@@ -92,12 +103,15 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
 
     const isKaizen = originTrigger.includes('Kaizen');
 
+    const effectiveBroadcast = isBroadcast && !lockedDept;
+    const effectiveDept = lockedDept || dept;
+
     onAdd({
       priority,
       recurrence: normalizedRecurrence,
-      dept: isBroadcast ? 'All Departments' : dept,
+      dept: effectiveBroadcast ? 'All Departments' : effectiveDept,
       desc: isKaizen && !desc.includes('[DSI Kaizen]') ? `⭐ [DSI Kaizen] ${desc}` : desc,
-      owner: isBroadcast ? 'All Department Leads' : (owner || 'Awari B'),
+      owner: effectiveBroadcast ? 'All Department Leads' : (owner || 'Awari B'),
       deadline: targetDeadline || '2026-09-18',
       evidence: 'Photo Proof',
       status: 'Pending',
@@ -220,23 +234,25 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
             </div>
           </div>
 
-          {/* Broadcast Card */}
-          <div className="border border-slate-200 bg-white rounded-xl p-3 flex items-center justify-between shadow-2xs">
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isBroadcast}
-                onChange={(e) => setIsBroadcast(e.target.checked)}
-                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer border-slate-300"
-              />
-              <span className="font-bold text-xs text-slate-800">
-                Broadcast across ALL 10 Departments
+          {/* Broadcast Card (plant-wide roles only — department-locked users create within their own dept) */}
+          {!lockedDept && (
+            <div className="border border-slate-200 bg-white rounded-xl p-3 flex items-center justify-between shadow-2xs">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isBroadcast}
+                  onChange={(e) => setIsBroadcast(e.target.checked)}
+                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer border-slate-300"
+                />
+                <span className="font-bold text-xs text-slate-800">
+                  Broadcast across ALL 10 Departments
+                </span>
+              </label>
+              <span className="text-xs font-semibold text-slate-500">
+                Plant-Wide
               </span>
-            </label>
-            <span className="text-xs font-semibold text-slate-500">
-              Plant-Wide
-            </span>
-          </div>
+            </div>
+          )}
 
           {/* Target Department & Assignee (shown when not broadcast) */}
           {!isBroadcast && (
@@ -245,15 +261,22 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                 <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                   Responsible Department *
                 </label>
-                <select
-                  value={dept}
-                  onChange={(e) => setDept(e.target.value)}
-                  className="w-full py-2 px-3 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 outline-none"
-                >
-                  {departments.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
+                {lockedDept ? (
+                  <div className="w-full py-2 px-3 bg-amber-50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-700" />
+                    <span>{lockedDept} (Locked)</span>
+                  </div>
+                ) : (
+                  <select
+                    value={dept}
+                    onChange={(e) => setDept(e.target.value)}
+                    className="w-full py-2 px-3 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 outline-none"
+                  >
+                    {departments.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
