@@ -16,7 +16,9 @@ import {
   ShieldCheck,
   LogOut,
   KeyRound,
-  UserCog
+  UserCog,
+  Menu,
+  X
 } from 'lucide-react';
 import { isGoogleSheetConnected } from '../utils/googleSheetsService';
 import { AuthUser, can } from '../utils/auth';
@@ -41,6 +43,22 @@ interface HeaderProps {
   cftCount?: number;
 }
 
+type TabColor = 'blue' | 'amber' | 'purple' | 'emerald';
+
+const TAB_ACTIVE_CLASSES: Record<TabColor, string> = {
+  blue: 'bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs',
+  amber: 'bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs',
+  purple: 'bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs',
+  emerald: 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs'
+};
+
+const TAB_BADGE_CLASSES: Record<TabColor, string> = {
+  blue: 'bg-blue-100 text-blue-700',
+  amber: 'bg-amber-100 text-amber-800',
+  purple: 'bg-purple-100 text-purple-700',
+  emerald: 'bg-emerald-100 text-emerald-700'
+};
+
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
@@ -60,6 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [showDeptMenu, setShowDeptMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
@@ -99,19 +118,65 @@ export const Header: React.FC<HeaderProps> = ({
     setTimeout(() => setSyncToast(null), 3000);
   };
 
+  const navTabs: { id: NavTab; label: string; icon: React.ElementType; badge: string; color: TabColor }[] = [
+    { id: 'cockpit', label: 'Cockpit', icon: LayoutGrid, badge: '167 alert', color: 'blue' },
+    { id: 'matrix', label: 'Master Matrix', icon: SlidersHorizontal, badge: String(totalCount), color: 'blue' },
+    { id: 'saturday_mom', label: 'Saturday MOM', icon: Calendar, badge: '10', color: 'blue' },
+    { id: 'recurring_pm', label: 'Recurring PM', icon: RotateCw, badge: '2', color: 'amber' },
+    { id: 'cft_handshake', label: 'CFT Handshake', icon: Users, badge: String(cftCount ?? 915), color: 'purple' },
+    { id: 'kaizen', label: 'Kaizen / DSI', icon: Sparkles, badge: '52', color: 'emerald' },
+    { id: 'dept_leaders', label: 'Dept Leaders & 4-V', icon: UserCheck, badge: '', color: 'blue' }
+  ];
+
+  const accountMenuItems = (closeMenu: () => void) => (
+    <>
+      {can(session, 'manageUsers') && (
+        <button
+          onClick={() => {
+            onOpenUserManagement();
+            closeMenu();
+          }}
+          className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors rounded-lg"
+        >
+          <UserCog className="w-3.5 h-3.5 text-blue-600" />
+          <span>Manage Users</span>
+        </button>
+      )}
+      <button
+        onClick={() => {
+          onOpenChangePassword();
+          closeMenu();
+        }}
+        className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors rounded-lg"
+      >
+        <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+        <span>Change Password</span>
+      </button>
+      <button
+        onClick={() => {
+          onLogout();
+          closeMenu();
+        }}
+        className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-red-50 text-red-600 transition-colors rounded-lg"
+      >
+        <LogOut className="w-3.5 h-3.5" />
+        <span>Logout</span>
+      </button>
+    </>
+  );
+
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200/90 shadow-sm select-none">
-      {/* Top Bar matching image.png */}
+      {/* Top Bar */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100">
-        
+
         {/* Left: Manufacturing Logo, Branding, Badges, Location */}
         <div className="flex items-center gap-3">
-          {/* Samarth Industries Logo (has company name within logo graphic) */}
           <div className="flex items-center">
-            <img 
-              src="/samarth_logo.png" 
-              alt="Samarth Industries" 
-              className="h-10 sm:h-11 w-auto max-w-[210px] object-contain cursor-pointer hover:opacity-95 transition-opacity drop-shadow-2xs"
+            <img
+              src="/samarth_logo.png"
+              alt="Samarth Industries"
+              className="h-8 sm:h-11 w-auto max-w-[150px] sm:max-w-[210px] object-contain cursor-pointer hover:opacity-95 transition-opacity drop-shadow-2xs"
               onClick={() => setActiveTab('matrix')}
             />
           </div>
@@ -141,8 +206,8 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Right: Controls matching image.png */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Right: Full controls — desktop/tablet only (sm and up) */}
+        <div className="hidden sm:flex items-center gap-2 sm:gap-2.5">
           {/* Department Scope Dropdown */}
           <div className="relative">
             {lockedDept ? (
@@ -162,7 +227,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }}
                 disabled={isRestrictedHodMode}
                 className={`border bg-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors ${
-                  isRestrictedHodMode 
+                  isRestrictedHodMode
                     ? 'border-amber-300 bg-amber-50/60 text-amber-900 cursor-not-allowed'
                     : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700'
                 }`}
@@ -248,38 +313,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="font-bold text-slate-900">{session.displayName}</div>
                   <div className="text-[11px] text-slate-500">{session.role}{session.department ? ` • ${session.department}` : ' • Plant-wide'}</div>
                 </div>
-                {can(session, 'manageUsers') && (
-                  <button
-                    onClick={() => {
-                      onOpenUserManagement();
-                      setShowUserMenu(false);
-                    }}
-                    className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors"
-                  >
-                    <UserCog className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Manage Users</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    onOpenChangePassword();
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors"
-                >
-                  <KeyRound className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Change Password</span>
-                </button>
-                <button
-                  onClick={() => {
-                    onLogout();
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-red-50 text-red-600 transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Logout</span>
-                </button>
+                {accountMenuItems(() => setShowUserMenu(false))}
               </div>
             )}
           </div>
@@ -293,122 +327,168 @@ export const Header: React.FC<HeaderProps> = ({
             <span>New Task</span>
           </button>
         </div>
+
+        {/* Right: Compact controls — mobile only (below sm) */}
+        <div className="flex sm:hidden items-center gap-2">
+          <button
+            onClick={onOpenNewModal}
+            className="bg-[#1d64ec] hover:bg-blue-700 active:bg-blue-800 text-white p-2 rounded-lg shadow-sm transition-all"
+            title="New Task"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+          </button>
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="border border-slate-200 bg-white text-slate-700 p-2 rounded-lg shadow-2xs relative"
+            title="Menu"
+          >
+            <Menu className="w-4 h-4" />
+            <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${isGoogleSheetConnected() ? 'bg-emerald-500' : 'bg-amber-400'}`}></span>
+          </button>
+        </div>
       </div>
 
-      {/* Row 2: Navigation Tabs matching image.png */}
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-1.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-        
-        {/* Cockpit Tab */}
-        <button
-          onClick={() => setActiveTab('cockpit')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-            activeTab === 'cockpit'
-              ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <LayoutGrid className="w-3.5 h-3.5 text-slate-500" />
-          <span>Cockpit</span>
-          <span className="bg-red-50 text-red-600 border border-red-200/80 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            167 alert
-          </span>
-        </button>
-
-        {/* Master Matrix Tab (Active by default) */}
-        <button
-          onClick={() => setActiveTab('matrix')}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-            activeTab === 'matrix'
-              ? 'bg-[#eff6ff] text-[#2563eb] border border-blue-200 shadow-2xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5 text-[#2563eb]" />
-          <span>Master Matrix</span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-            activeTab === 'matrix' ? 'bg-[#dbeafe] text-[#1d4ed8]' : 'bg-slate-100 text-slate-600'
-          }`}>
-            {totalCount}
-          </span>
-        </button>
-
-        {/* Saturday MOM Tab */}
-        <button
-          onClick={() => setActiveTab('saturday_mom')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-            activeTab === 'saturday_mom'
-              ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <Calendar className="w-3.5 h-3.5 text-slate-500" />
-          <span>Saturday MOM</span>
-          <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            10
-          </span>
-        </button>
-
-        {/* Recurring PM Tab */}
-        <button
-          onClick={() => setActiveTab('recurring_pm')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-            activeTab === 'recurring_pm'
-              ? 'bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <RotateCw className="w-3.5 h-3.5 text-slate-500" />
-          <span>Recurring PM</span>
-          <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            2
-          </span>
-        </button>
-
-        {/* CFT Handshake Tab */}
-        <button
-          onClick={() => setActiveTab('cft_handshake')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-            activeTab === 'cft_handshake'
-              ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5 text-slate-500" />
-          <span>CFT Handshake</span>
-          <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            {cftCount ?? 915}
-          </span>
-        </button>
-
-        {/* Kaizen / DSI Tab */}
-        <button
-          onClick={() => setActiveTab('kaizen')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-            activeTab === 'kaizen'
-              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5 text-slate-500" />
-          <span>Kaizen / DSI</span>
-          <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            52
-          </span>
-        </button>
-
-        {/* Dept Leaders & 4-V Tab */}
-        <button
-          onClick={() => setActiveTab('dept_leaders')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-            activeTab === 'dept_leaders'
-              ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-          }`}
-        >
-          <UserCheck className="w-3.5 h-3.5 text-slate-500" />
-          <span>Dept Leaders & 4-V</span>
-        </button>
+      {/* Row 2: Navigation Tabs — desktop/tablet only, horizontal scroll if needed */}
+      <div className="hidden sm:flex w-full px-4 sm:px-6 lg:px-8 py-1.5 items-center gap-1.5 overflow-x-auto scrollbar-none">
+        {navTabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5 text-slate-500" />
+              <span>{tab.label}</span>
+              {tab.badge && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-slate-100 text-slate-600'}`}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {/* Mobile Menu Drawer — everything (dept scope, sync, account, nav tabs) in one place */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 sm:hidden">
+          <div
+            className="absolute inset-0 bg-slate-900/50 animate-in fade-in duration-150"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-sm bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
+              <span className="font-bold text-slate-900">Menu</span>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-5 text-xs text-slate-700">
+              {/* Signed-in user */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
+                  <span className="font-bold text-sm text-slate-900">{session.displayName}</span>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {session.role}{session.department ? ` • ${session.department}` : ' • Plant-wide'}
+                </div>
+              </div>
+
+              {/* Department Scope */}
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Department Scope
+                </div>
+                {lockedDept ? (
+                  <div className="border border-amber-300 bg-amber-50 text-amber-950 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-700" />
+                    <span>{lockedDept} (Locked)</span>
+                  </div>
+                ) : isRestrictedHodMode ? (
+                  <div className="border border-amber-300 bg-amber-50/60 text-amber-900 text-xs font-bold px-3 py-2 rounded-xl">
+                    🔒 {currentDept} (HOD Only)
+                  </div>
+                ) : (
+                  <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                    {deptScopes.map((scope) => {
+                      const isSelected = (scope === 'All Departments' && !isSpecificDeptSelected) || currentDept === scope;
+                      return (
+                        <button
+                          key={scope}
+                          onClick={() => {
+                            onSelectDept?.(scope === 'All Departments' ? '' : scope);
+                          }}
+                          className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors ${
+                            isSelected ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-slate-700'
+                          }`}
+                        >
+                          <span>{scope}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Sync */}
+              <button
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="w-full border border-emerald-300 bg-emerald-50/80 text-emerald-800 text-xs font-semibold px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>Sync Sheet</span>
+                <span className={`w-2 h-2 rounded-full ${isGoogleSheetConnected() ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></span>
+              </button>
+
+              {/* Account actions */}
+              <div className="border-t border-slate-200 pt-3 space-y-1">
+                {accountMenuItems(() => setIsMobileMenuOpen(false))}
+              </div>
+
+              {/* Nav tabs */}
+              <div className="border-t border-slate-200 pt-3 space-y-1">
+                {navTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                        isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-slate-500" />
+                        {tab.label}
+                      </span>
+                      {tab.badge && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-slate-100 text-slate-600'}`}>
+                          {tab.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification when Syncing */}
       {syncToast && (

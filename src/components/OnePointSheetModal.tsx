@@ -89,7 +89,7 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
             </div>
 
             {/* Metadata Table */}
-            <div className="grid grid-cols-4 gap-2 text-xs border border-slate-300 rounded overflow-hidden">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs border border-slate-300 rounded overflow-hidden">
               <div className="p-2 bg-slate-50 font-bold border-r border-slate-300">Department</div>
               <div className="p-2 border-r border-slate-300 font-semibold">{action.dept}</div>
               <div className="p-2 bg-slate-50 font-bold border-r border-slate-300">Target Date</div>
