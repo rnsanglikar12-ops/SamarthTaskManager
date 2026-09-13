@@ -96,10 +96,17 @@ export default function App() {
   // Backed entirely by the connected Google Sheet — no app server involved.
   useEffect(() => {
     let isMounted = true;
+    let isFetching = false;
     let lastSheetSnapshot = '';
 
     async function pullFromSheet(): Promise<boolean> {
       if (!isGoogleSheetConnected()) return false;
+      // Guards against overlapping requests (e.g. the poll timer firing at the
+      // same moment as a focus/visibility event) — two concurrent FETCH_ALL
+      // calls can race each other in Apps Script's redirect-based response
+      // serving and cause one to fail with a spurious 404.
+      if (isFetching) return false;
+      isFetching = true;
       try {
         const fresh = await fetchActionsFromGoogleSheet();
         if (fresh && fresh.length > 0) {
@@ -115,6 +122,8 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Google Sheet sync failed, using local cache:', err);
+      } finally {
+        isFetching = false;
       }
       return false;
     }
@@ -130,14 +139,21 @@ export default function App() {
       }
     })();
 
-    // 2. Periodic background sync polling (every 20 seconds — Apps Script has daily call quotas)
+    // 2. Periodic background sync polling — paused while the tab isn't visible
+    // (a backgrounded tab has no one watching for updates, and Apps Script
+    // has daily execution-time quotas, so there's no reason to keep polling it).
     const pollInterval = setInterval(() => {
-      pullFromSheet();
-    }, 20000);
+      if (document.visibilityState === 'visible') {
+        pullFromSheet();
+      }
+    }, 60000);
 
-    // 3. Immediate sync on window focus / tab switch
+    // 3. Immediate sync when the tab becomes visible/focused again — NOT when
+    // it's switched away from, which the old unconditional listener also fired on.
     const handleFocusSync = () => {
-      pullFromSheet();
+      if (document.visibilityState === 'visible') {
+        pullFromSheet();
+      }
     };
 
     window.addEventListener('focus', handleFocusSync);
