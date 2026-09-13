@@ -25,8 +25,7 @@ import {
   updateActionInGoogleSheet,
   createActionInGoogleSheet,
   deleteActionInGoogleSheet,
-  fetchActionsFromGoogleSheet,
-  pushAllActionsToGoogleSheet
+  fetchActionsFromGoogleSheet
 } from './utils/googleSheetsService';
 import { AuthUser, can, isDeptInScope, getSession, setSession as persistSession, clearSession } from './utils/auth';
 import { CheckCircle2, Calendar, RotateCw, Users, Crown, Lock } from 'lucide-react';
@@ -324,7 +323,10 @@ export default function App() {
 
   // Manual refresh (Header's Refresh button): the only way — besides initial
   // page load — that the app fetches from the Google Sheet, now that
-  // background polling has been removed.
+  // background polling has been removed. One-directional: sheet -> app only.
+  // Never pushes local state back, even when the sheet comes back empty —
+  // an empty sheet is a valid real state (e.g. right after a reset), not a
+  // signal to reseed it with whatever happens to be loaded locally.
   const handleRefresh = useCallback(async () => {
     if (!isGoogleSheetConnected()) {
       showToast('Google Sheet backend is not configured. Contact your administrator.');
@@ -332,18 +334,13 @@ export default function App() {
     }
     try {
       const fresh = await fetchActionsFromGoogleSheet();
-      if (fresh && fresh.length > 0) {
-        setActions(fresh);
-        saveActionsToStorage(fresh);
-        showToast(`Refreshed — ${fresh.length} records loaded`);
-        return;
-      }
-      await pushAllActionsToGoogleSheet(actions);
-      showToast(`Master operational matrix synchronized — ${actions.length} records pushed to Google Sheet`);
+      setActions(fresh || []);
+      saveActionsToStorage(fresh || []);
+      showToast(`Refreshed — ${fresh?.length ?? 0} records loaded`);
     } catch (err) {
       showToast('Refresh failed — check your connection settings.');
     }
-  }, [actions, showToast]);
+  }, [showToast]);
 
   // Specific filtered lists for dedicated tabs — all scoped to visibleActions
   const momActions = useMemo(() => visibleActions.filter(a => a.isMOM), [visibleActions]);
