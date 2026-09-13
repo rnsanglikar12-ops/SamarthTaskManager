@@ -6,15 +6,9 @@ import {
   loadBaseSentinelActions,
   isRaisedToOtherDept 
 } from './data/sentinelDataLoader';
-import { 
-  fetchServerActions, 
-  checkServerVersion, 
-  pushAllActionsToServer, 
-  pushSingleActionUpdate, 
-  pushSingleActionDelete, 
+import {
   subscribeToTabBroadcast,
-  getLocalVersion,
-  setLocalVersion 
+  broadcastLocalUpdate
 } from './utils/syncService';
 import { exportActionsToCsv, exportActionsToJson } from './utils/exportUtils';
 import { Header, NavTab } from './components/Header';
@@ -28,12 +22,13 @@ import { NewActionModal } from './components/NewActionModal';
 import { SecretControlModal } from './components/SecretControlModal';
 import { DeptHeadLinksModal } from './components/DeptHeadLinksModal';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
-import { 
-  isGoogleSheetConnected, 
-  updateActionInGoogleSheet, 
-  createActionInGoogleSheet, 
-  deleteActionInGoogleSheet, 
-  fetchActionsFromGoogleSheet 
+import {
+  isGoogleSheetConnected,
+  updateActionInGoogleSheet,
+  createActionInGoogleSheet,
+  deleteActionInGoogleSheet,
+  fetchActionsFromGoogleSheet,
+  pushAllActionsToGoogleSheet
 } from './utils/googleSheetsService';
 import { isSecretControlUnlocked, setActiveRole, getActiveRole } from './utils/security';
 import { CheckCircle2, AlertCircle, Sparkles, Calendar, RotateCw, Users, Crown, Lock } from 'lucide-react';
@@ -120,62 +115,49 @@ export default function App() {
   }, [showToast]);
 
   // Real-Time Task Synchronization across links, devices, and browser tabs
+  // Backed entirely by the connected Google Sheet — no app server involved.
   useEffect(() => {
     let isMounted = true;
+    let lastSheetSnapshot = '';
 
-    // 1. Initial sync with central server
-    async function initialServerSync() {
+    async function pullFromSheet(): Promise<boolean> {
+      if (!isGoogleSheetConnected()) return false;
       try {
-        const serverResult = await fetchServerActions();
-        if (serverResult && serverResult.actions && serverResult.actions.length > 0) {
+        const fresh = await fetchActionsFromGoogleSheet();
+        const snapshot = JSON.stringify(fresh);
+        if (fresh && snapshot !== lastSheetSnapshot) {
+          lastSheetSnapshot = snapshot;
           if (isMounted) {
-            setActions(serverResult.actions);
-            saveActionsToStorage(serverResult.actions);
-            setLocalVersion(serverResult.version);
+            setActions(fresh);
+            saveActionsToStorage(fresh);
           }
-        } else {
-          // Central store is empty on first boot: seed with base 1,050 records
-          const base = getInitialActions();
-          const seedVer = await pushAllActionsToServer(base);
-          if (seedVer) setLocalVersion(seedVer);
+          return true;
         }
       } catch (err) {
-        console.warn('Initial server sync failed, using local cache:', err);
+        console.warn('Google Sheet sync failed, using local cache:', err);
       }
+      return false;
     }
 
-    initialServerSync();
-
-    // 2. Periodic background sync polling (every 3.5 seconds)
-    const pollInterval = setInterval(async () => {
-      try {
-        const versionInfo = await checkServerVersion();
-        if (versionInfo && versionInfo.version > getLocalVersion()) {
-          const freshData = await fetchServerActions();
-          if (freshData && freshData.actions && isMounted) {
-            setActions(freshData.actions);
-            saveActionsToStorage(freshData.actions);
-            setLocalVersion(freshData.version);
-          }
-        }
-      } catch (err) {
-        // Silently swallow polling glitches
+    // 1. Initial sync from the Google Sheet (falls back to local cache if not connected)
+    (async () => {
+      const pulled = await pullFromSheet();
+      if (!pulled && isGoogleSheetConnected()) {
+        // Sheet is connected but empty on first boot: seed it with the local matrix
+        const base = getInitialActions();
+        await pushAllActionsToGoogleSheet(base);
+        lastSheetSnapshot = JSON.stringify(base);
       }
-    }, 3500);
+    })();
+
+    // 2. Periodic background sync polling (every 20 seconds — Apps Script has daily call quotas)
+    const pollInterval = setInterval(() => {
+      pullFromSheet();
+    }, 20000);
 
     // 3. Immediate sync on window focus / tab switch
-    const handleFocusSync = async () => {
-      try {
-        const versionInfo = await checkServerVersion();
-        if (versionInfo && versionInfo.version > getLocalVersion()) {
-          const freshData = await fetchServerActions();
-          if (freshData && freshData.actions && isMounted) {
-            setActions(freshData.actions);
-            saveActionsToStorage(freshData.actions);
-            setLocalVersion(freshData.version);
-          }
-        }
-      } catch (err) {}
+    const handleFocusSync = () => {
+      pullFromSheet();
     };
 
     window.addEventListener('focus', handleFocusSync);
@@ -199,13 +181,13 @@ export default function App() {
           saveActionsToStorage(next);
           return next;
         });
-      } else if (data.type === 'FULL_SYNC') {
-        fetchServerActions().then(fresh => {
-          if (fresh && fresh.actions && isMounted) {
-            setActions(fresh.actions);
-            saveActionsToStorage(fresh.actions);
+      } else if (data.type === 'FULL_SYNC' && isGoogleSheetConnected()) {
+        fetchActionsFromGoogleSheet().then(fresh => {
+          if (fresh && isMounted) {
+            setActions(fresh);
+            saveActionsToStorage(fresh);
           }
-        });
+        }).catch(() => {});
       }
     });
 
@@ -296,7 +278,7 @@ export default function App() {
       return next;
     });
     if (updatedItem) {
-      pushSingleActionUpdate(updatedItem);
+      broadcastLocalUpdate('UPDATE', updatedItem);
       if (isGoogleSheetConnected()) {
         updateActionInGoogleSheet(updatedItem);
       }
@@ -312,7 +294,7 @@ export default function App() {
       return next;
     });
     setSelectedAction(null);
-    pushSingleActionDelete(id);
+    broadcastLocalUpdate('DELETE', { id });
     if (isGoogleSheetConnected()) {
       deleteActionInGoogleSheet(id);
     }
@@ -326,7 +308,7 @@ export default function App() {
       saveActionsToStorage(next);
       return next;
     });
-    pushSingleActionUpdate(updated);
+    broadcastLocalUpdate('UPDATE', updated);
     if (isGoogleSheetConnected()) {
       updateActionInGoogleSheet(updated);
     }
@@ -345,43 +327,32 @@ export default function App() {
       saveActionsToStorage(next);
       return next;
     });
-    pushSingleActionUpdate(newItem);
+    broadcastLocalUpdate('UPDATE', newItem);
     if (isGoogleSheetConnected()) {
       createActionInGoogleSheet(newItem);
     }
     showToast(`Created new Action #${nextId} & broadcasted to all links`);
   }, [actions, showToast]);
 
-  // Sync Sheet simulation & pull from Google Sheets / central server
+  // Pull the latest matrix from the connected Google Sheet, or push the local
+  // matrix as the seed if the sheet is empty.
   const handleSyncSheet = useCallback(async () => {
-    if (isGoogleSheetConnected()) {
-      try {
-        const fresh = await fetchActionsFromGoogleSheet();
-        if (fresh && fresh.length > 0) {
-          setActions(fresh);
-          saveActionsToStorage(fresh);
-          pushAllActionsToServer(fresh);
-          showToast(`Synchronized with Google Sheet — ${fresh.length} records updated`);
-          return;
-        }
-      } catch (err) {
-        console.warn('Google Sheet fetch error:', err);
-      }
+    if (!isGoogleSheetConnected()) {
+      showToast('Connect a Google Sheet first (Sheets icon) to enable cloud sync.');
+      return;
     }
-
     try {
-      const res = await fetchServerActions();
-      if (res && res.actions && res.actions.length > 0) {
-        setActions(res.actions);
-        saveActionsToStorage(res.actions);
-        setLocalVersion(res.version);
-        showToast(`Synchronized with Central Cloud Server — ${res.actions.length} records active`);
-      } else {
-        await pushAllActionsToServer(actions);
-        showToast(`Master operational matrix synchronized — ${actions.length} records up to date`);
+      const fresh = await fetchActionsFromGoogleSheet();
+      if (fresh && fresh.length > 0) {
+        setActions(fresh);
+        saveActionsToStorage(fresh);
+        showToast(`Synchronized with Google Sheet — ${fresh.length} records updated`);
+        return;
       }
+      await pushAllActionsToGoogleSheet(actions);
+      showToast(`Master operational matrix synchronized — ${actions.length} records pushed to Google Sheet`);
     } catch (err) {
-      showToast(`Master matrix synchronized — ${actions.length} records active`);
+      showToast('Google Sheet sync failed — check your connection settings.');
     }
   }, [actions, showToast]);
 
@@ -746,7 +717,6 @@ export default function App() {
         onSyncCompleted={(newActions, msg) => {
           setActions(newActions);
           saveActionsToStorage(newActions);
-          pushAllActionsToServer(newActions);
           showToast(msg);
         }}
       />
