@@ -253,7 +253,7 @@ export default function App() {
   }, [visibleActions]);
 
   // Update status directly & sync across links
-  const handleUpdateStatus = useCallback((id: number, newStatus: ActionStatus) => {
+  const handleUpdateStatus = useCallback((id: string, newStatus: ActionStatus) => {
     const target = actions.find(a => a.id === id);
     if (!target || !can(session, 'editOwnDept', target)) {
       showToast('Access denied: you do not have permission to update this task.');
@@ -281,7 +281,7 @@ export default function App() {
   }, [actions, session, showToast]);
 
   // Delete item (Plant Head / MD / Admin authority only) & sync across links
-  const handleDeleteAction = useCallback((id: number) => {
+  const handleDeleteAction = useCallback((id: string) => {
     if (!can(session, 'deleteTask')) {
       showToast('Access denied: you do not have permission to delete tasks.');
       return;
@@ -317,28 +317,33 @@ export default function App() {
     showToast(`Task #${updated.id} successfully updated & synced across links`);
   }, [session, showToast]);
 
-  // Add new item & sync across links
-  const handleAddAction = useCallback((newItemData: Omit<ActionItem, 'id'>) => {
+  // Add new item & sync across links. ID is assigned server-side (atomic,
+  // department-prefixed, e.g. "PDC-47") to avoid collisions between
+  // concurrent users — see createActionInGoogleSheet.
+  const handleAddAction = useCallback(async (newItemData: Omit<ActionItem, 'id'>): Promise<boolean> => {
     if (!can(session, 'createTask')) {
       showToast('Access denied: you do not have permission to create tasks.');
-      return;
+      return false;
     }
-    const nextId = actions.reduce((max, a) => Math.max(max, a.id), 0) + 1;
-    const newItem: ActionItem = {
-      ...newItemData,
-      id: nextId
-    };
+    if (!isGoogleSheetConnected()) {
+      showToast('Google Sheet backend is not configured. Contact your administrator.');
+      return false;
+    }
+    const newId = await createActionInGoogleSheet(newItemData);
+    if (!newId) {
+      showToast('Failed to create task — Google Sheet sync error. Please try again.');
+      return false;
+    }
+    const newItem: ActionItem = { ...newItemData, id: newId };
     setActions(prev => {
       const next = [newItem, ...prev];
       saveActionsToStorage(next);
       return next;
     });
     broadcastLocalUpdate('UPDATE', newItem);
-    if (isGoogleSheetConnected()) {
-      createActionInGoogleSheet(newItem);
-    }
-    showToast(`Created new Action #${nextId} & broadcasted to all links`);
-  }, [actions, session, showToast]);
+    showToast(`Created new Action #${newId} & broadcasted to all links`);
+    return true;
+  }, [session, showToast]);
 
   // Pull the latest matrix from the connected Google Sheet, or push the local
   // matrix as the seed if the sheet is empty.
@@ -651,7 +656,6 @@ export default function App() {
         isOpen={isNewModalOpen}
         onClose={() => setIsNewModalOpen(false)}
         onAdd={handleAddAction}
-        nextId={actions.reduce((max, a) => Math.max(max, a.id), 0) + 1}
         lockedDept={lockedDept}
       />
 

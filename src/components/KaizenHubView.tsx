@@ -58,15 +58,21 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
 
   // Extract Kaizen & DSI initiatives from actions (exactly 52 initiatives matching screenshot)
   const kaizenActions = useMemo(() => {
-    return actions.filter(a => 
-      a.isKaizen || 
-      (a.id >= 20 && a.id <= 71) ||
-      a.desc.toLowerCase().includes('kaizen') || 
-      a.desc.toLowerCase().includes('dsi') || 
-      a.actionNotes.toLowerCase().includes('dsi') ||
-      a.desc.toLowerCase().includes('pokayoke') ||
-      a.desc.toLowerCase().includes('5s')
-    );
+    return actions.filter(a => {
+      // Legacy seed heuristic only applies to plain numeric-looking IDs
+      // (new department-prefixed IDs like "PDC-47" aren't numeric).
+      const numericId = Number(a.id);
+      const inLegacyRange = !isNaN(numericId) && numericId >= 20 && numericId <= 71;
+      return (
+        a.isKaizen ||
+        inLegacyRange ||
+        a.desc.toLowerCase().includes('kaizen') ||
+        a.desc.toLowerCase().includes('dsi') ||
+        a.actionNotes.toLowerCase().includes('dsi') ||
+        a.desc.toLowerCase().includes('pokayoke') ||
+        a.desc.toLowerCase().includes('5s')
+      );
+    });
   }, [actions]);
 
   // Champions list (the 17 HODs)
@@ -131,7 +137,8 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
       return true;
     }).sort((a, b) => {
       if (sortField === 'id') {
-        return sortAsc ? a.id - b.id : b.id - a.id;
+        const cmp = a.id.localeCompare(b.id, undefined, { numeric: true });
+        return sortAsc ? cmp : -cmp;
       } else if (sortField === 'dept') {
         return sortAsc ? a.dept.localeCompare(b.dept) : b.dept.localeCompare(a.dept);
       } else {

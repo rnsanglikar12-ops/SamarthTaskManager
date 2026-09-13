@@ -271,7 +271,7 @@ export function loadBaseSentinelActions(): ActionItem[] {
     const cleanOwner = sanitizeOwner(owner, dept);
 
     itemsMap.set(id, {
-      id,
+      id: String(id),
       priority,
       recurrence: resolvedRecurrence,
       dept,
@@ -295,7 +295,7 @@ export function loadBaseSentinelActions(): ActionItem[] {
   }
 
   // Convert map to sorted array descending by ID (1050, 1049, 1048, ...)
-  const sortedItems = Array.from(itemsMap.values()).sort((a, b) => b.id - a.id);
+  const sortedItems = Array.from(itemsMap.values()).sort((a, b) => Number(b.id) - Number(a.id));
   return sortedItems;
 }
 
@@ -313,7 +313,7 @@ export function getInitialActions(): ActionItem[] {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed: ActionItem[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length === 1050 && parsed[0]?.id === 1050) {
+        if (Array.isArray(parsed) && parsed.length === 1050 && String(parsed[0]?.id) === '1050') {
           return parsed;
         }
       }

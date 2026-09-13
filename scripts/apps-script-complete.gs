@@ -1,0 +1,650 @@
+/**
+ * SAMARTH INDUSTRIES - OPERATIONAL EXCELLENCE PLATFORM
+ * Google Apps Script Webhook Backend (100% Free Lifetime Hosting)
+ *
+ * This is the complete, canonical script. Replace your entire Apps Script
+ * project with this file each time you get an updated version — do not
+ * keep older "*-fix.gs" files from previous rounds, they're superseded.
+ *
+ * WHAT CHANGED IN THIS VERSION:
+ * - New task IDs are now department-prefixed (e.g. "PDC-47") and assigned
+ *   ATOMICALLY on the server using LockService, in a new "IDCounters" sheet
+ *   tab (one row per department, tracking the last-used number). This
+ *   replaces the old client-side "current max + 1" scheme, which allowed
+ *   two people creating tasks at the same time to collide on the same ID.
+ * - CREATE_TASK now ignores any ID sent by the client and always generates
+ *   the real one server-side, returned as `createdId` in the response.
+ * - UPDATE_TASK / DELETE_TASK now compare IDs as strings (not numbers),
+ *   since IDs are no longer purely numeric.
+ * - Existing tasks keep their old plain-numeric IDs untouched — only new
+ *   tasks get the prefixed format.
+ * - (Carried over from the previous version): Before/After photo upload to
+ *   Google Drive, Action Notes / Machine Note / Kaizen Benefit / Broadcast
+ *   columns, and the Users tab / login system.
+ */
+
+const SHEET_NAME = 'MasterActionMatrix';
+const HEADERS = [
+  'ID',
+  'Department',
+  'Description',
+  'Target Date',
+  'Status',
+  'Priority',
+  'Owner',
+  'Originator',
+  'Originator Dept',
+  'Actual Date',
+  'Recurrence',
+  'Action Type',
+  'Kaizen (DSI)',
+  'Saturday MOM',
+  'Verification Status',
+  'Last Updated',
+  'Problem Photo',
+  'After Photo',
+  'Action Notes',
+  'Machine Note',
+  'Kaizen Benefit',
+  'Broadcast'
+];
+
+const DRIVE_FOLDER_NAME = 'Samarth_Action_Photos';
+
+function getOrCreatePhotoFolder_() {
+  const folders = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return DriveApp.createFolder(DRIVE_FOLDER_NAME);
+}
+
+// Converts a base64 data URL into a shareable Drive link. If the value is
+// already a URL (or empty), it's passed through unchanged.
+function saveBase64ImageToDrive_(base64Data, filename) {
+  if (!base64Data || typeof base64Data !== 'string') return '';
+  if (base64Data.startsWith('http://') || base64Data.startsWith('https://')) {
+    return base64Data;
+  }
+  if (!base64Data.includes('base64,')) {
+    return '';
+  }
+  try {
+    const parts = base64Data.split('base64,');
+    const contentType = parts[0].split(':')[1].split(';')[0];
+    const decoded = Utilities.base64Decode(parts[1]);
+    const blob = Utilities.newBlob(decoded, contentType, filename);
+    const folder = getOrCreatePhotoFolder_();
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  } catch (err) {
+    return '';
+  }
+}
+
+function getOrCreateSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    sheet.getRange(1, 1, 1, HEADERS.length)
+      .setBackground('#1d64ec')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  } else {
+    // Self-heal: extend the header row if HEADERS has grown since this
+    // sheet was first created (e.g. new columns added in a later version).
+    const existingHeaderCount = sheet.getLastColumn();
+    if (existingHeaderCount < HEADERS.length) {
+      const newHeaders = HEADERS.slice(existingHeaderCount);
+      const startCol = existingHeaderCount + 1;
+      sheet.getRange(1, startCol, 1, newHeaders.length).setValues([newHeaders]);
+      sheet.getRange(1, startCol, 1, newHeaders.length)
+        .setBackground('#1d64ec')
+        .setFontColor('#ffffff')
+        .setFontWeight('bold');
+    }
+  }
+  return sheet;
+}
+
+// ============================================================
+// DEPARTMENT-PREFIXED, COLLISION-SAFE TASK ID ASSIGNMENT
+// ============================================================
+
+const DEPT_PREFIXES = {
+  'MD': 'MD',
+  'Plant Head': 'PH',
+  'PDC': 'PDC',
+  'Die Maint': 'DM',
+  'SPM': 'SPM',
+  'Fettling': 'FTL',
+  'Machine shop-01': 'MS1',
+  'Machine shop-02': 'MS2',
+  'PPC': 'PPC',
+  'Store': 'STR',
+  'MC Maint': 'MCM',
+  'Quality': 'QA',
+  'NPD': 'NPD',
+  'Tool Room': 'TR',
+  'HR': 'HR',
+  'Account': 'ACC',
+  'Purchase': 'PUR',
+  'All Departments': 'ALL'
+};
+
+// Fallback for any department name not in the table above (e.g. legacy/
+// stray values in historical data) — first 4 alphanumeric characters,
+// uppercased, so ID generation never breaks for an unrecognized dept.
+function getDeptPrefix_(dept) {
+  if (DEPT_PREFIXES[dept]) return DEPT_PREFIXES[dept];
+  const cleaned = String(dept || 'GEN').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return cleaned.slice(0, 4) || 'GEN';
+}
+
+const ID_COUNTERS_SHEET_NAME = 'IDCounters';
+
+function getOrCreateIdCountersSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(ID_COUNTERS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(ID_COUNTERS_SHEET_NAME);
+    sheet.getRange(1, 1, 1, 2).setValues([['Prefix', 'LastNumber']]);
+    sheet.getRange(1, 1, 1, 2)
+      .setBackground('#1d64ec')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// Atomically reserves and returns the next ID for a department, e.g.
+// "PDC-47". Uses a script-wide lock so two concurrent CREATE_TASK calls
+// can never be handed the same number, even under real concurrent usage.
+function getNextTaskId_(dept) {
+  const prefix = getDeptPrefix_(dept);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = getOrCreateIdCountersSheet_();
+    const data = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    let lastNumber = 0;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === prefix) {
+        rowIndex = i + 1;
+        lastNumber = Number(data[i][1]) || 0;
+        break;
+      }
+    }
+    const nextNumber = lastNumber + 1;
+    if (rowIndex > 0) {
+      sheet.getRange(rowIndex, 2).setValue(nextNumber);
+    } else {
+      sheet.appendRow([prefix, nextNumber]);
+    }
+    return prefix + '-' + nextNumber;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doGet(e) {
+  try {
+    const action = (e && e.parameter && e.parameter.action) || 'FETCH_ALL';
+
+    if (action === 'FETCH_USERS') return doFetchUsers();
+
+    const sheet = getOrCreateSheet();
+
+    if (action === 'PING') {
+      const lastRow = sheet.getLastRow();
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        sheetTitle: sheet.getName(),
+        rowCount: Math.max(0, lastRow - 1)
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        records: []
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const records = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row[0]) continue;
+      records.push({
+        id: String(row[0]),
+        dept: String(row[1] || ''),
+        description: String(row[2] || ''),
+        targetDate: formatDateValue(row[3]),
+        status: String(row[4] || 'Pending'),
+        priority: String(row[5] || 'B'),
+        owner: String(row[6] || ''),
+        originator: String(row[7] || ''),
+        originatorDept: String(row[8] || row[1] || ''),
+        actualDate: row[9] ? formatDateValue(row[9]) : undefined,
+        recurrence: String(row[10] || 'One-Time'),
+        actionType: String(row[11] || 'General'),
+        isKaizen: row[12] === true || String(row[12]).toUpperCase() === 'TRUE',
+        isMOM: row[13] === true || String(row[13]).toUpperCase() === 'TRUE',
+        verificationStatus: String(row[14] || 'Pending Verification'),
+        lastUpdated: row[15] ? formatDateValue(row[15]) : '',
+        attachedPhoto: String(row[16] || '') || undefined,
+        afterPhoto: String(row[17] || '') || undefined,
+        actionNotes: String(row[18] || ''),
+        machineNote: String(row[19] || '') || undefined,
+        kaizenBenefit: String(row[20] || '') || undefined,
+        isBroadcast: row[21] === true || String(row[21]).toUpperCase() === 'TRUE'
+      });
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      count: records.length,
+      records: records
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    const sheet = getOrCreateSheet();
+    const payload = JSON.parse(e.postData.contents);
+    const action = payload.action;
+
+    if (action === 'LOGIN') return doLogin(payload);
+    if (action === 'CREATE_USER') return doCreateUser(payload);
+    if (action === 'UPDATE_USER') return doUpdateUser(payload);
+    if (action === 'DELETE_USER') return doDeleteUser(payload);
+    if (action === 'CHANGE_PASSWORD') return doChangePassword(payload);
+
+    if (action === 'SYNC_ALL_TASKS') {
+      // Full re-sync of already-identified items (from local cache) — IDs
+      // are passed through as-is, not regenerated.
+      const tasks = payload.records || [];
+      sheet.clearContents();
+
+      const rows = [HEADERS];
+      tasks.forEach(t => {
+        let problemPhotoLink = t.attachedPhoto || '';
+        if (problemPhotoLink.startsWith('data:image')) {
+          problemPhotoLink = saveBase64ImageToDrive_(problemPhotoLink, 'Task_' + t.id + '_Problem.jpg');
+        }
+        let afterPhotoLink = t.afterPhoto || '';
+        if (afterPhotoLink.startsWith('data:image')) {
+          afterPhotoLink = saveBase64ImageToDrive_(afterPhotoLink, 'Task_' + t.id + '_Evidence.jpg');
+        }
+        rows.push([
+          t.id,
+          t.dept || '',
+          t.description || '',
+          t.targetDate || '',
+          t.status || 'Pending',
+          t.priority || 'B',
+          t.owner || '',
+          t.originator || '',
+          t.originatorDept || t.dept || '',
+          t.actualDate || '',
+          t.recurrence || 'One-Time',
+          t.actionType || 'General',
+          t.isKaizen ? 'TRUE' : 'FALSE',
+          t.isMOM ? 'TRUE' : 'FALSE',
+          t.verificationStatus || 'Pending Verification',
+          new Date().toISOString(),
+          problemPhotoLink,
+          afterPhotoLink,
+          t.actionNotes || '',
+          t.machineNote || '',
+          t.kaizenBenefit || '',
+          t.isBroadcast ? 'TRUE' : 'FALSE'
+        ]);
+      });
+
+      if (rows.length > 0) {
+        sheet.getRange(1, 1, rows.length, HEADERS.length).setValues(rows);
+        sheet.getRange(1, 1, 1, HEADERS.length)
+          .setBackground('#1d64ec')
+          .setFontColor('#ffffff')
+          .setFontWeight('bold');
+        sheet.setFrozenRows(1);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        syncedCount: tasks.length
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'UPDATE_TASK') {
+      const item = payload.data;
+      const data = sheet.getDataRange().getValues();
+      let foundIndex = -1;
+
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(item.id)) {
+          foundIndex = i + 1;
+          break;
+        }
+      }
+
+      let problemPhotoLink = item.attachedPhoto || '';
+      if (problemPhotoLink.startsWith('data:image')) {
+        problemPhotoLink = saveBase64ImageToDrive_(problemPhotoLink, 'Task_' + item.id + '_Problem.jpg');
+      }
+      let afterPhotoLink = item.afterPhoto || '';
+      if (afterPhotoLink.startsWith('data:image')) {
+        afterPhotoLink = saveBase64ImageToDrive_(afterPhotoLink, 'Task_' + item.id + '_Evidence.jpg');
+      }
+
+      const updatedRow = [
+        item.id,
+        item.dept || '',
+        item.description || '',
+        item.targetDate || '',
+        item.status || 'Pending',
+        item.priority || 'B',
+        item.owner || '',
+        item.originator || '',
+        item.originatorDept || item.dept || '',
+        item.actualDate || '',
+        item.recurrence || 'One-Time',
+        item.actionType || 'General',
+        item.isKaizen ? 'TRUE' : 'FALSE',
+        item.isMOM ? 'TRUE' : 'FALSE',
+        item.verificationStatus || 'Pending Verification',
+        new Date().toISOString(),
+        problemPhotoLink,
+        afterPhotoLink,
+        item.actionNotes || '',
+        item.machineNote || '',
+        item.kaizenBenefit || '',
+        item.isBroadcast ? 'TRUE' : 'FALSE'
+      ];
+
+      if (foundIndex > 0) {
+        sheet.getRange(foundIndex, 1, 1, HEADERS.length).setValues([updatedRow]);
+      } else {
+        sheet.appendRow(updatedRow);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        updatedId: item.id,
+        attachedPhoto: problemPhotoLink,
+        afterPhoto: afterPhotoLink
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'CREATE_TASK') {
+      const item = payload.data;
+
+      // The real, collision-safe ID is always generated here — any ID the
+      // client sent is ignored.
+      const newId = getNextTaskId_(item.dept);
+
+      let problemPhotoLink = item.attachedPhoto || '';
+      if (problemPhotoLink.startsWith('data:image')) {
+        problemPhotoLink = saveBase64ImageToDrive_(problemPhotoLink, 'Task_' + newId + '_Problem.jpg');
+      }
+      let afterPhotoLink = item.afterPhoto || '';
+      if (afterPhotoLink.startsWith('data:image')) {
+        afterPhotoLink = saveBase64ImageToDrive_(afterPhotoLink, 'Task_' + newId + '_Evidence.jpg');
+      }
+
+      const newRow = [
+        newId,
+        item.dept || '',
+        item.description || '',
+        item.targetDate || '',
+        item.status || 'Pending',
+        item.priority || 'B',
+        item.owner || '',
+        item.originator || '',
+        item.originatorDept || item.dept || '',
+        item.actualDate || '',
+        item.recurrence || 'One-Time',
+        item.actionType || 'General',
+        item.isKaizen ? 'TRUE' : 'FALSE',
+        item.isMOM ? 'TRUE' : 'FALSE',
+        item.verificationStatus || 'Pending Verification',
+        new Date().toISOString(),
+        problemPhotoLink,
+        afterPhotoLink,
+        item.actionNotes || '',
+        item.machineNote || '',
+        item.kaizenBenefit || '',
+        item.isBroadcast ? 'TRUE' : 'FALSE'
+      ];
+      sheet.appendRow(newRow);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        createdId: newId,
+        attachedPhoto: problemPhotoLink,
+        afterPhoto: afterPhotoLink
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'DELETE_TASK') {
+      const targetId = String(payload.id);
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === targetId) {
+          sheet.deleteRow(i + 1);
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        deletedId: targetId
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: 'Unknown action'
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function formatDateValue(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(val);
+}
+
+// ============================================================
+// USER MANAGEMENT (unchanged from your last deployment)
+// ============================================================
+
+const USERS_SHEET_NAME = 'Users';
+const USERS_HEADERS = ['username', 'displayName', 'passwordHash', 'role', 'department', 'mustChangePassword', 'createdAt'];
+
+// This only seeds a fresh Users tab if one doesn't already exist — since
+// yours already exists with your real admin account, this constant is
+// never used on your deployment. Left as a placeholder for reference.
+const DEFAULT_ADMIN_PASSWORD_HASH = 'UNUSED_YOUR_USERS_TAB_ALREADY_EXISTS';
+
+function getOrCreateUsersSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(USERS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(USERS_SHEET_NAME);
+    sheet.getRange(1, 1, 1, USERS_HEADERS.length).setValues([USERS_HEADERS]);
+    sheet.getRange(1, 1, 1, USERS_HEADERS.length)
+      .setBackground('#1d64ec')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold');
+    sheet.setFrozenRows(1);
+
+    sheet.appendRow([
+      'admin',
+      'Administrator',
+      DEFAULT_ADMIN_PASSWORD_HASH,
+      'Admin',
+      '',
+      true,
+      new Date().toISOString()
+    ]);
+  }
+  return sheet;
+}
+
+function findUserRow_(sheet, username) {
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase() === String(username).toLowerCase()) {
+      return { rowIndex: i + 1, row: data[i] };
+    }
+  }
+  return null;
+}
+
+function userRowToRecord_(row, includeHash) {
+  const record = {
+    username: row[0],
+    displayName: row[1],
+    role: row[3],
+    department: row[4] || null,
+    mustChangePassword: row[5] === true || String(row[5]).toUpperCase() === 'TRUE',
+    createdAt: row[6]
+  };
+  if (includeHash) record.passwordHash = row[2];
+  return record;
+}
+
+function doFetchUsers() {
+  try {
+    const sheet = getOrCreateUsersSheet_();
+    const data = sheet.getDataRange().getValues();
+    const users = [];
+    for (let i = 1; i < data.length; i++) {
+      if (!data[i][0]) continue;
+      users.push(userRowToRecord_(data[i], false));
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success', users: users }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doLogin(payload) {
+  try {
+    const sheet = getOrCreateUsersSheet_();
+    const found = findUserRow_(sheet, payload.username);
+    if (!found || found.row[2] !== payload.passwordHash) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Invalid credentials' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      user: userRowToRecord_(found.row, false)
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doCreateUser(payload) {
+  try {
+    const sheet = getOrCreateUsersSheet_();
+    const item = payload.data;
+    if (findUserRow_(sheet, item.username)) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Username already exists' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    sheet.appendRow([
+      item.username,
+      item.displayName,
+      item.passwordHash,
+      item.role,
+      item.department || '',
+      false,
+      new Date().toISOString()
+    ]);
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doUpdateUser(payload) {
+  try {
+    const sheet = getOrCreateUsersSheet_();
+    const item = payload.data;
+    const found = findUserRow_(sheet, item.username);
+    if (!found) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'User not found' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    if (item.displayName !== undefined) sheet.getRange(found.rowIndex, 2).setValue(item.displayName);
+    if (item.role !== undefined) sheet.getRange(found.rowIndex, 4).setValue(item.role);
+    if (item.department !== undefined) sheet.getRange(found.rowIndex, 5).setValue(item.department || '');
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doDeleteUser(payload) {
+  try {
+    const sheet = getOrCreateUsersSheet_();
+    const found = findUserRow_(sheet, payload.username);
+    if (!found) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'User not found' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    sheet.deleteRow(found.rowIndex);
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doChangePassword(payload) {
+  try {
+    const sheet = getOrCreateUsersSheet_();
+    const found = findUserRow_(sheet, payload.username);
+    if (!found) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'User not found' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    sheet.getRange(found.rowIndex, 3).setValue(payload.newPasswordHash);
+    sheet.getRange(found.rowIndex, 6).setValue(!!payload.mustChangePassword);
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}

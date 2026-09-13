@@ -34,9 +34,9 @@ interface ActionRegisterViewProps {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   onOpenDetail: (action: ActionItem) => void;
-  onUpdateStatus: (id: number, newStatus: ActionStatus) => void;
+  onUpdateStatus: (id: string, newStatus: ActionStatus) => void;
   onOpenNewModal: () => void;
-  onDelete?: (id: number) => void;
+  onDelete?: (id: string) => void;
   lockedDept?: string | null;
 }
 

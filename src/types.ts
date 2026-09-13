@@ -3,7 +3,9 @@ export type Recurrence = 'One-Time' | 'Daily' | 'Weekly';
 export type ActionStatus = 'Pending' | 'In process' | 'Completed' | 'Under Verification' | 'Hold';
 
 export interface ActionItem {
-  id: number;
+  // Legacy tasks have plain numeric-looking IDs (e.g. "1052"); new tasks are
+  // assigned a department-prefixed ID server-side (e.g. "PDC-47").
+  id: string;
   priority: Priority;
   recurrence: Recurrence;
   dept: string;

@@ -92,7 +92,7 @@ export async function fetchActionsFromGoogleSheet(): Promise<ActionItem[]> {
   if (data && Array.isArray(data.records)) {
     updateLastSyncTime();
     return data.records.map((r: any, idx: number) => ({
-      id: Number(r.id || r.ID || idx + 1),
+      id: String(r.id ?? r.ID ?? idx + 1),
       dept: String(r.dept || r.Department || 'Operations'),
       desc: String(r.desc || r.description || r.Description || ''),
       deadline: String(r.deadline || r.targetDate || r['Target Date'] || ''),
@@ -110,7 +110,8 @@ export async function fetchActionsFromGoogleSheet(): Promise<ActionItem[]> {
       kaizenBenefit: r.kaizenBenefit || r['Kaizen Benefit'] || undefined,
       isMOM: Boolean(r.isMOM ?? (r['Saturday MOM'] === true || r['Saturday MOM'] === 'TRUE' || r['Saturday MOM'] === 'Yes')),
       isCFT: Boolean(r.isCFT ?? (r['CFT Handshake'] === true || r['CFT Handshake'] === 'TRUE' || r['CFT Handshake'] === 'Yes')),
-      machineNote: r.machineNote || r['Machine / Note'] || undefined
+      machineNote: r.machineNote || r['Machine / Note'] || undefined,
+      isBroadcast: Boolean(r.isBroadcast ?? (r['Broadcast'] === true || r['Broadcast'] === 'TRUE' || r['Broadcast'] === 'Yes'))
     }));
   }
 
@@ -123,6 +124,20 @@ export async function fetchActionsFromGoogleSheet(): Promise<ActionItem[]> {
 }
 
 /**
+ * Translate an ActionItem into the field names the deployed Apps Script
+ * actually expects (e.g. `desc` -> `description`, `deadline` -> `targetDate`).
+ * The live sheet's CREATE_TASK/UPDATE_TASK handlers read these exact names —
+ * sending the raw ActionItem field names silently produced blank cells.
+ */
+function toSheetTaskPayload(action: Omit<ActionItem, 'id'> & { id?: string }) {
+  return {
+    ...action,
+    description: action.desc,
+    targetDate: action.deadline
+  };
+}
+
+/**
  * Push an updated task row to the Google Sheet
  */
 export async function updateActionInGoogleSheet(action: ActionItem): Promise<boolean> {
@@ -130,7 +145,7 @@ export async function updateActionInGoogleSheet(action: ActionItem): Promise<boo
   try {
     await sendToAppsScript({
       action: 'UPDATE_TASK',
-      data: action
+      data: toSheetTaskPayload(action)
     });
     updateLastSyncTime();
     return true;
@@ -143,25 +158,29 @@ export async function updateActionInGoogleSheet(action: ActionItem): Promise<boo
 /**
  * Push a newly created task to the Google Sheet
  */
-export async function createActionInGoogleSheet(action: ActionItem): Promise<boolean> {
-  if (!isGoogleSheetConnected()) return false;
+export async function createActionInGoogleSheet(action: Omit<ActionItem, 'id'>): Promise<string | null> {
+  if (!isGoogleSheetConnected()) return null;
   try {
-    await sendToAppsScript({
+    const result = await sendToAppsScript({
       action: 'CREATE_TASK',
-      data: action
+      data: toSheetTaskPayload(action)
     });
-    updateLastSyncTime();
-    return true;
+    if (result?.status === 'success' && result.createdId) {
+      updateLastSyncTime();
+      return String(result.createdId);
+    }
+    console.warn('Google Sheet did not return a created task ID:', result);
+    return null;
   } catch (err) {
     console.warn('Failed to create task in Google Sheet:', err);
-    return false;
+    return null;
   }
 }
 
 /**
  * Delete a task row from the Google Sheet
  */
-export async function deleteActionInGoogleSheet(id: number): Promise<boolean> {
+export async function deleteActionInGoogleSheet(id: string): Promise<boolean> {
   if (!isGoogleSheetConnected()) return false;
   try {
     await sendToAppsScript({
@@ -186,7 +205,7 @@ export async function pushAllActionsToGoogleSheet(actions: ActionItem[]): Promis
 
   const result = await sendToAppsScript({
     action: 'SYNC_ALL_TASKS',
-    records: actions
+    records: actions.map(toSheetTaskPayload)
   });
 
   updateLastSyncTime();

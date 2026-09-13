@@ -17,8 +17,7 @@ import {
 interface NewActionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (newItem: Omit<ActionItem, 'id'>) => void;
-  nextId: number;
+  onAdd: (newItem: Omit<ActionItem, 'id'>) => Promise<boolean>;
   lockedDept?: string | null;
 }
 
@@ -26,11 +25,11 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   isOpen,
   onClose,
   onAdd,
-  nextId,
   lockedDept = null
 }) => {
   if (!isOpen) return null;
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [desc, setDesc] = useState('');
   const [originTrigger, setOriginTrigger] = useState('💡 General Kaizen (Continuous Improvement)');
   const [originator, setOriginator] = useState('👔 Plant Head (Awari B.)');
@@ -93,9 +92,9 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!desc.trim()) return;
+    if (!desc.trim() || isSubmitting) return;
 
     let normalizedRecurrence: Recurrence = 'One-Time';
     if (recurrenceOption.toLowerCase().includes('daily')) normalizedRecurrence = 'Daily';
@@ -106,7 +105,8 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     const effectiveBroadcast = isBroadcast && !lockedDept;
     const effectiveDept = lockedDept || dept;
 
-    onAdd({
+    setIsSubmitting(true);
+    const success = await onAdd({
       priority,
       recurrence: normalizedRecurrence,
       dept: effectiveBroadcast ? 'All Departments' : effectiveDept,
@@ -123,8 +123,11 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       isBroadcast,
       machineNote: machineEqNo || undefined
     });
+    setIsSubmitting(false);
 
-    onClose();
+    if (success) {
+      onClose();
+    }
   };
 
   return (
@@ -426,16 +429,22 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-colors shadow-2xs"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-colors shadow-2xs disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-60"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>{isBroadcast ? 'Broadcast to All Depts' : 'Create Action Item'}</span>
+              <span>
+                {isSubmitting
+                  ? 'Creating...'
+                  : isBroadcast ? 'Broadcast to All Depts' : 'Create Action Item'}
+              </span>
             </button>
           </div>
         </form>

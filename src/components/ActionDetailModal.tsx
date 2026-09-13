@@ -22,7 +22,7 @@ interface ActionDetailModalProps {
   action: ActionItem | null;
   onClose: () => void;
   onSave: (updated: ActionItem) => void;
-  onDelete?: (id: number) => void;
+  onDelete?: (id: string) => void;
   currentDept?: string;
   session: AuthUser | null;
 }
