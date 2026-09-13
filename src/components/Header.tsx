@@ -31,7 +31,7 @@ interface HeaderProps {
   totalCount: number;
   completedCount: number;
   onOpenNewModal: () => void;
-  onSyncSheet?: () => void;
+  onRefresh?: () => void;
   session: AuthUser;
   onLogout: () => void;
   onOpenUserManagement: () => void;
@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
   totalCount = 1050,
   completedCount,
   onOpenNewModal,
-  onSyncSheet,
+  onRefresh,
   session,
   onLogout,
   onOpenUserManagement,
@@ -79,8 +79,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [showDeptMenu, setShowDeptMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshToast, setRefreshToast] = useState<string | null>(null);
 
   const isSpecificDeptSelected = Boolean(currentDept && currentDept !== '' && currentDept !== 'All Departments');
 
@@ -108,17 +108,17 @@ export const Header: React.FC<HeaderProps> = ({
     ? `Dept: ${currentDept}`
     : 'All Departments (Executive View)';
 
-  const handleSync = async () => {
-    if (isSyncing) return;
-    setIsSyncing(true);
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
     try {
-      if (onSyncSheet) {
-        await onSyncSheet();
+      if (onRefresh) {
+        await onRefresh();
       }
-      setSyncToast(`Cloud Synced: Central matrix up to date`);
-      setTimeout(() => setSyncToast(null), 3000);
+      setRefreshToast(`Refreshed: latest matrix loaded`);
+      setTimeout(() => setRefreshToast(null), 3000);
     } finally {
-      setIsSyncing(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -285,16 +285,16 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Google Sheets / Master Matrix Sync Controls */}
+          {/* Refresh: pulls the latest data from the Google Sheet on demand */}
           <div className="flex items-center gap-1">
             <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="border border-emerald-300 hover:border-emerald-400 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors"
-              title="Synchronize with Central Master Matrix & Google Sheet"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="border border-emerald-300 hover:border-emerald-400 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors disabled:opacity-60"
+              title="Refresh: fetch the latest data from the Google Sheet"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>Sync Sheet</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
               <span className={`w-2 h-2 rounded-full ${isGoogleSheetConnected() ? 'bg-emerald-500 shadow-sm animate-pulse' : 'bg-amber-400'}`}></span>
             </button>
           </div>
@@ -444,14 +444,14 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
 
-              {/* Sync */}
+              {/* Refresh */}
               <button
-                onClick={handleSync}
-                disabled={isSyncing}
-                className="w-full border border-emerald-300 bg-emerald-50/80 text-emerald-800 text-xs font-semibold px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="w-full border border-emerald-300 bg-emerald-50/80 text-emerald-800 text-xs font-semibold px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs disabled:opacity-60"
               >
-                <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>Sync Sheet</span>
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                 <span className={`w-2 h-2 rounded-full ${isGoogleSheetConnected() ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></span>
               </button>
 
@@ -494,11 +494,11 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      {/* Toast Notification when Syncing */}
-      {syncToast && (
+      {/* Toast Notification when Refreshing */}
+      {refreshToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 border border-slate-800 animate-in fade-in">
           <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span>{syncToast}</span>
+          <span>{refreshToast}</span>
         </div>
       )}
     </header>

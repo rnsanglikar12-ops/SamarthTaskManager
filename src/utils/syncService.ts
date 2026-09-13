@@ -8,7 +8,7 @@ try {
   console.warn('BroadcastChannel not supported', e);
 }
 
-export function broadcastLocalUpdate(type: 'UPDATE' | 'DELETE' | 'FULL_SYNC', payload: any) {
+export function broadcastLocalUpdate(type: 'UPDATE' | 'DELETE', payload: any) {
   try {
     if (broadcastChannel) {
       broadcastChannel.postMessage({ type, payload, timestamp: Date.now() });

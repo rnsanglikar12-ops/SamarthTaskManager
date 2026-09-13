@@ -92,74 +92,33 @@ export default function App() {
     setFilters(prev => ({ ...prev, dept: '' }));
   }, []);
 
-  // Real-Time Task Synchronization across links, devices, and browser tabs
-  // Backed entirely by the connected Google Sheet — no app server involved.
+  // Task data loading: fetched once when the page opens, and again only when
+  // the user explicitly clicks Refresh (handleRefresh) — no background
+  // polling. Cross-tab propagation of THIS tab's own edits (via
+  // BroadcastChannel/localStorage) still applies instantly and costs no
+  // network request, since it's just relaying data this tab already has.
   useEffect(() => {
     let isMounted = true;
-    let isFetching = false;
-    let lastSheetSnapshot = '';
 
-    async function pullFromSheet(): Promise<boolean> {
-      if (!isGoogleSheetConnected()) return false;
-      // Guards against overlapping requests (e.g. the poll timer firing at the
-      // same moment as a focus/visibility event) — two concurrent FETCH_ALL
-      // calls can race each other in Apps Script's redirect-based response
-      // serving and cause one to fail with a spurious 404.
-      if (isFetching) return false;
-      isFetching = true;
+    (async () => {
+      if (!isGoogleSheetConnected()) return;
       try {
         const fresh = await fetchActionsFromGoogleSheet();
         if (fresh && fresh.length > 0) {
-          const snapshot = JSON.stringify(fresh);
-          if (snapshot !== lastSheetSnapshot) {
-            lastSheetSnapshot = snapshot;
-            if (isMounted) {
-              setActions(fresh);
-              saveActionsToStorage(fresh);
-            }
+          if (isMounted) {
+            setActions(fresh);
+            saveActionsToStorage(fresh);
           }
-          return true;
+        } else {
+          // Sheet is connected but empty on first boot: seed it with the local matrix
+          await pushAllActionsToGoogleSheet(getInitialActions());
         }
       } catch (err) {
         console.warn('Google Sheet sync failed, using local cache:', err);
-      } finally {
-        isFetching = false;
-      }
-      return false;
-    }
-
-    // 1. Initial sync from the Google Sheet (falls back to local cache if not connected)
-    (async () => {
-      const pulled = await pullFromSheet();
-      if (!pulled && isGoogleSheetConnected()) {
-        // Sheet is connected but empty on first boot: seed it with the local matrix
-        const base = getInitialActions();
-        await pushAllActionsToGoogleSheet(base);
-        lastSheetSnapshot = JSON.stringify(base);
       }
     })();
 
-    // 2. Periodic background sync polling — paused while the tab isn't visible
-    // (a backgrounded tab has no one watching for updates, and Apps Script
-    // has daily execution-time quotas, so there's no reason to keep polling it).
-    const pollInterval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        pullFromSheet();
-      }
-    }, 60000);
-
-    // 3. Immediate sync when the tab becomes visible/focused again — NOT when
-    // it's switched away from, which the old unconditional listener also fired on.
-    const handleFocusSync = () => {
-      if (document.visibilityState === 'visible') {
-        pullFromSheet();
-      }
-    };
-
-    window.addEventListener('focus', handleFocusSync);
-    document.addEventListener('visibilitychange', handleFocusSync);
-
-    // 4. Instant cross-tab messaging via BroadcastChannel
+    // Instant cross-tab messaging via BroadcastChannel (local relay only)
     const unsubscribeBroadcast = subscribeToTabBroadcast((data) => {
       if (data.type === 'UPDATE' && data.payload) {
         const item: ActionItem = data.payload;
@@ -177,17 +136,10 @@ export default function App() {
           saveActionsToStorage(next);
           return next;
         });
-      } else if (data.type === 'FULL_SYNC' && isGoogleSheetConnected()) {
-        fetchActionsFromGoogleSheet().then(fresh => {
-          if (fresh && isMounted) {
-            setActions(fresh);
-            saveActionsToStorage(fresh);
-          }
-        }).catch(() => {});
       }
     });
 
-    // 5. Cross-tab localStorage event listener
+    // Cross-tab localStorage event listener (local relay only)
     const handleStorageEvent = (e: StorageEvent) => {
       if (e.key === 'samarth_industries_matrix_v4' && e.newValue) {
         try {
@@ -202,9 +154,6 @@ export default function App() {
 
     return () => {
       isMounted = false;
-      clearInterval(pollInterval);
-      window.removeEventListener('focus', handleFocusSync);
-      document.removeEventListener('visibilitychange', handleFocusSync);
       unsubscribeBroadcast();
       window.removeEventListener('storage', handleStorageEvent);
     };
@@ -376,9 +325,10 @@ export default function App() {
     return true;
   }, [session, showToast]);
 
-  // Pull the latest matrix from the connected Google Sheet, or push the local
-  // matrix as the seed if the sheet is empty.
-  const handleSyncSheet = useCallback(async () => {
+  // Manual refresh (Header's Refresh button): the only way — besides initial
+  // page load — that the app fetches from the Google Sheet, now that
+  // background polling has been removed.
+  const handleRefresh = useCallback(async () => {
     if (!isGoogleSheetConnected()) {
       showToast('Google Sheet backend is not configured. Contact your administrator.');
       return;
@@ -388,13 +338,13 @@ export default function App() {
       if (fresh && fresh.length > 0) {
         setActions(fresh);
         saveActionsToStorage(fresh);
-        showToast(`Synchronized with Google Sheet — ${fresh.length} records updated`);
+        showToast(`Refreshed — ${fresh.length} records loaded`);
         return;
       }
       await pushAllActionsToGoogleSheet(actions);
       showToast(`Master operational matrix synchronized — ${actions.length} records pushed to Google Sheet`);
     } catch (err) {
-      showToast('Google Sheet sync failed — check your connection settings.');
+      showToast('Refresh failed — check your connection settings.');
     }
   }, [actions, showToast]);
 
@@ -426,7 +376,7 @@ export default function App() {
         completedCount={stats.completed}
         cftCount={cftActions.length}
         onOpenNewModal={() => setIsNewModalOpen(true)}
-        onSyncSheet={handleSyncSheet}
+        onRefresh={handleRefresh}
         session={session}
         onLogout={handleLogout}
         onOpenUserManagement={() => setIsUserMgmtModalOpen(true)}
