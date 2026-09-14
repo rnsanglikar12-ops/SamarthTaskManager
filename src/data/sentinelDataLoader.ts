@@ -16,16 +16,18 @@ export function isRaisedToOtherDept(originatorDept?: string, targetDept?: string
 // Shared DSI/Kaizen classification predicate — used both to build the
 // Kaizen/DSI tab's list and to compute the header's tab badge count, so the
 // two always agree with each other.
+//
+// This must be the *only* signal — a task is DSI iff isKaizen is true.
+// It used to also fuzzy-match the description/notes text for words like
+// "kaizen", "dsi", "5s", which swept in any task that merely mentioned
+// common plant terminology, and permanently trapped every task created
+// while isKaizen defaulted to true (see NewActionModal) since that bug
+// also baked a "[DSI Kaizen]" prefix into the description text. isKaizen
+// is only ever set via ActionDetailModal's explicit, gated conversion
+// (Completed status + before/after photos + notes) — nothing should
+// second-guess that.
 export function isKaizenAction(a: ActionItem): boolean {
-  const desc = a.desc.toLowerCase();
-  return (
-    a.isKaizen ||
-    desc.includes('kaizen') ||
-    desc.includes('dsi') ||
-    (a.actionNotes || '').toLowerCase().includes('dsi') ||
-    desc.includes('pokayoke') ||
-    desc.includes('5s')
-  );
+  return a.isKaizen;
 }
 
 const STORAGE_KEY = 'samarth_industries_matrix_v4';
