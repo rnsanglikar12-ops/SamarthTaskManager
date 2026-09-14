@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ActionItem, Priority, Recurrence } from '../types';
 import { TASK_DEPARTMENTS, getAssigneesForDept, getDefaultAssignee } from '../data/orgStructure';
+import { uploadPhotoToGoogleSheet } from '../utils/googleSheetsService';
+import { compressImage } from '../utils/imageUtils';
 import {
   X,
   Plus,
@@ -11,7 +13,9 @@ import {
   AlertTriangle,
   Sparkles,
   ChevronDown,
-  Lock
+  Lock,
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 
 interface NewActionModalProps {
@@ -63,6 +67,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   const [originatorDeptTouched, setOriginatorDeptTouched] = useState(false);
   const [owner, setOwner] = useState(getDefaultAssignee(lockedDepts?.[0] || 'Quality'));
   const [problemPhoto, setProblemPhoto] = useState<string>('');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Department-scoped users always raise tasks as one of their own
   // departments, but may target any department's responsible team (and, like
@@ -107,20 +112,28 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     setTargetDeadline(`${yyyy}-${mm}-${dd}`);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Uploads to Drive immediately on selection, not at form-submit time, so
+  // the task-create call only ever carries the short returned link — never
+  // the raw base64 image data. Compressed first so a multi-MB camera photo
+  // doesn't sit occupying an Apps Script execution slot for long.
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        setProblemPhoto(uploadEvent.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    setIsUploadingPhoto(true);
+    try {
+      const base64 = await compressImage(file);
+      const url = await uploadPhotoToGoogleSheet(base64, file.name);
+      if (url) {
+        setProblemPhoto(url);
+      }
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!desc.trim() || isSubmitting) return;
+    if (!desc.trim() || isSubmitting || isUploadingPhoto) return;
 
     let normalizedRecurrence: Recurrence = 'One-Time';
     if (recurrenceOption.toLowerCase().includes('daily')) normalizedRecurrence = 'Daily';
@@ -414,7 +427,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2.5">
-              <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 shadow-xs transition-colors">
+              <label className={`cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 shadow-xs transition-colors ${isUploadingPhoto ? 'opacity-60 pointer-events-none' : ''}`}>
                 <Camera className="w-4 h-4" />
                 <span>Camera</span>
                 <input
@@ -422,22 +435,24 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                   accept="image/*"
                   capture="environment"
                   className="hidden"
+                  disabled={isUploadingPhoto}
                   onChange={handlePhotoUpload}
                 />
               </label>
 
-              <label className="cursor-pointer bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 shadow-2xs transition-colors">
+              <label className={`cursor-pointer bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 shadow-2xs transition-colors ${isUploadingPhoto ? 'opacity-60 pointer-events-none' : ''}`}>
                 <Upload className="w-4 h-4 text-slate-500" />
                 <span>Upload</span>
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
+                  disabled={isUploadingPhoto}
                   onChange={handlePhotoUpload}
                 />
               </label>
 
-              {problemPhoto && (
+              {problemPhoto && !isUploadingPhoto && (
                 <button
                   type="button"
                   onClick={() => setProblemPhoto('')}
@@ -448,14 +463,23 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
               )}
             </div>
 
-            {problemPhoto && (
-              <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-slate-200">
-                <img 
-                  src={problemPhoto} 
-                  alt="Problem Preview" 
-                  className="w-full h-full object-cover" 
-                />
+            {isUploadingPhoto && (
+              <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Uploading photo to Drive…</span>
               </div>
+            )}
+
+            {problemPhoto && !isUploadingPhoto && (
+              <a
+                href={problemPhoto}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Photo attached — View on Drive</span>
+              </a>
             )}
           </div>
 

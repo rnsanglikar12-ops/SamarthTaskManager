@@ -69,16 +69,17 @@ function getOrCreatePhotoFolder_() {
   return DriveApp.createFolder(DRIVE_FOLDER_NAME);
 }
 
-// Converts a base64 data URL into a directly embeddable image link. If the
-// value is already a URL (or empty), it's passed through unchanged.
+// Converts a base64 data URL into a Drive link. If the value is already a
+// URL (or empty), it's passed through unchanged.
 //
-// IMPORTANT: file.getUrl() returns Drive's *viewer page* URL
-// (drive.google.com/file/d/ID/view), which browsers cannot render inside an
-// <img> tag -- it loads as a broken image. Using the uc?export=view form
-// instead returns the raw image bytes directly, which is what <img src>
-// actually needs. This is why photos looked fine immediately after local
-// upload (still a base64 preview) but vanished after any save/refresh
-// round-trip through Drive.
+// Photos are click-through links now, not embedded <img> thumbnails (see
+// UPLOAD_PHOTO in doPost), so the plain Drive viewer link (file.getUrl(),
+// drive.google.com/file/d/ID/view) is exactly what's needed — it's a normal
+// top-level navigation, which Drive always allows for anyone with link
+// access, unlike embedding it as a cross-origin <img> (which Google blocks
+// for the uc?export=view form and requires a separate hotlink-safe
+// lh3.googleusercontent.com form for — unnecessary complexity once nothing
+// needs to embed it).
 function saveBase64ImageToDrive_(base64Data, filename) {
   if (!base64Data || typeof base64Data !== 'string') return '';
   if (base64Data.startsWith('http://') || base64Data.startsWith('https://')) {
@@ -95,7 +96,7 @@ function saveBase64ImageToDrive_(base64Data, filename) {
     const folder = getOrCreatePhotoFolder_();
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+    return file.getUrl();
   } catch (err) {
     return '';
   }
@@ -290,6 +291,24 @@ function doPost(e) {
     if (action === 'UPDATE_USER') return doUpdateUser(payload);
     if (action === 'DELETE_USER') return doDeleteUser(payload);
     if (action === 'CHANGE_PASSWORD') return doChangePassword(payload);
+
+    if (action === 'UPLOAD_PHOTO') {
+      // Dedicated upload endpoint so a photo only ever travels over the wire
+      // once, at selection time — CREATE_TASK/UPDATE_TASK then just carry
+      // the short returned link like any other text field, instead of
+      // re-sending the full base64 blob on every save.
+      const url = saveBase64ImageToDrive_(payload.base64 || '', payload.filename || ('Photo_' + Date.now() + '.jpg'));
+      if (!url) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Upload failed'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        url: url
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
 
     if (action === 'CLEAR_ALL_TASKS') {
       // Requires an explicit confirmation token so a stray/malformed request

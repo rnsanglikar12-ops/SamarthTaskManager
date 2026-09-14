@@ -14,10 +14,13 @@ import {
   ShieldCheck,
   Check,
   AlertCircle,
-  Loader2
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
 import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
+import { uploadPhotoToGoogleSheet } from '../utils/googleSheetsService';
+import { compressImage } from '../utils/imageUtils';
 
 interface ActionDetailModalProps {
   action: ActionItem | null;
@@ -42,6 +45,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const [priority, setPriority] = useState<Priority>(action.priority);
   const [attachedPhoto, setAttachedPhoto] = useState<string>(action.attachedPhoto || '');
   const [afterPhoto, setAfterPhoto] = useState<string>(action.afterPhoto || '');
+  const [uploadingSlot, setUploadingSlot] = useState<null | 'before' | 'after'>(null);
   const [isKaizen, setIsKaizen] = useState<boolean>(action.isKaizen || false);
   const [kaizenBenefit, setKaizenBenefit] = useState<string>(action.kaizenBenefit || '');
 
@@ -59,7 +63,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   // show a spinner and every action button can be disabled — prevents a
   // double-click from firing a duplicate save/delete request.
   const [pendingAction, setPendingAction] = useState<null | 'save' | 'resolve' | 'verify' | 'rework' | 'delete'>(null);
-  const isBusy = pendingAction !== null;
+  const isBusy = pendingAction !== null || uploadingSlot !== null;
 
   // Role permissions
   const hasReviseAuthority = can(session, 'reviseDeadline');
@@ -213,19 +217,27 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     setStatus(newStatus);
   };
 
-  const handlePhotoUpload = (type: 'before' | 'after', e: React.ChangeEvent<HTMLInputElement>) => {
+  // Uploads to Drive immediately on selection, not at save time, so every
+  // save call (Save / Mark Resolved / Submit for Verification / etc.) only
+  // ever carries the short returned link — never the raw base64 image data.
+  // Compressed first so a multi-MB camera photo doesn't sit occupying an
+  // Apps Script execution slot for long.
+  const handlePhotoUpload = async (type: 'before' | 'after', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        const result = uploadEvent.target?.result as string;
+    if (!file) return;
+    setUploadingSlot(type);
+    try {
+      const base64 = await compressImage(file);
+      const url = await uploadPhotoToGoogleSheet(base64, file.name);
+      if (url) {
         if (type === 'before') {
-          setAttachedPhoto(result);
+          setAttachedPhoto(url);
         } else {
-          setAfterPhoto(result);
+          setAfterPhoto(url);
         }
-      };
-      reader.readAsDataURL(file);
+      }
+    } finally {
+      setUploadingSlot(null);
     }
   };
 
@@ -527,10 +539,14 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Before Photo Box */}
               <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center justify-center min-h-[140px] text-center relative overflow-hidden">
-                {attachedPhoto ? (
-                  <div className="relative w-full h-full min-h-[120px] flex flex-col items-center justify-center">
-                    <img src={attachedPhoto} alt="Before" className="max-h-28 rounded-lg object-contain" />
-                    <button 
+                {uploadingSlot === 'before' ? (
+                  <div className="flex flex-col items-center gap-2 text-slate-500">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span className="text-xs font-semibold">Uploading to Drive…</span>
+                  </div>
+                ) : attachedPhoto ? (
+                  <div className="relative w-full h-full min-h-[120px] flex flex-col items-center justify-center gap-2">
+                    <button
                       type="button"
                       onClick={() => setAttachedPhoto('')}
                       className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 hover:text-red-700 rounded-lg shadow-sm border border-slate-200"
@@ -538,18 +554,28 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-1">Before Condition Proof</span>
+                    <a
+                      href={attachedPhoto}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>View on Drive</span>
+                    </a>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Before Condition Proof</span>
                   </div>
                 ) : (
                   <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full py-4 text-slate-500 hover:text-blue-600 transition-colors">
                     <Camera className="w-6 h-6 mb-1.5 text-slate-400" />
                     <span className="text-xs font-semibold">[ B ] Attach Before Photo</span>
                     <span className="text-[10px] text-slate-400 mt-0.5">Click to upload JPG / PNG</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => handlePhotoUpload('before', e)} 
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={isBusy}
+                      onChange={(e) => handlePhotoUpload('before', e)}
                     />
                   </label>
                 )}
@@ -557,10 +583,14 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
               {/* After Photo Box */}
               <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-col items-center justify-center min-h-[140px] text-center relative overflow-hidden">
-                {afterPhoto ? (
-                  <div className="relative w-full h-full min-h-[120px] flex flex-col items-center justify-center">
-                    <img src={afterPhoto} alt="After" className="max-h-28 rounded-lg object-contain" />
-                    <button 
+                {uploadingSlot === 'after' ? (
+                  <div className="flex flex-col items-center gap-2 text-slate-500">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span className="text-xs font-semibold">Uploading to Drive…</span>
+                  </div>
+                ) : afterPhoto ? (
+                  <div className="relative w-full h-full min-h-[120px] flex flex-col items-center justify-center gap-2">
+                    <button
                       type="button"
                       onClick={() => setAfterPhoto('')}
                       className="absolute top-1 right-1 p-1 bg-white/90 text-red-600 hover:text-red-700 rounded-lg shadow-sm border border-slate-200"
@@ -568,18 +598,28 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-1">After Resolution Proof</span>
+                    <a
+                      href={afterPhoto}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>View on Drive</span>
+                    </a>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">After Resolution Proof</span>
                   </div>
                 ) : (
                   <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full py-4 text-slate-500 hover:text-blue-600 transition-colors">
                     <ImageIcon className="w-6 h-6 mb-1.5 text-slate-400" />
                     <span className="text-xs font-semibold">[ A ] Attach After Photo</span>
                     <span className="text-[10px] text-slate-400 mt-0.5">Click to upload JPG / PNG</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => handlePhotoUpload('after', e)} 
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={isBusy}
+                      onChange={(e) => handlePhotoUpload('after', e)}
                     />
                   </label>
                 )}

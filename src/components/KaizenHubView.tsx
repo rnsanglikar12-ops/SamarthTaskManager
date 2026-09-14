@@ -466,7 +466,7 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
                             title="Before Photo Evidence"
                           >
                             {item.attachedPhoto ? (
-                              <img src={item.attachedPhoto} alt="Before" className="w-full h-full object-cover" />
+                              <Check className="w-4 h-4 text-slate-600" />
                             ) : (
                               <span className="text-[9px] font-mono font-bold text-slate-500">BFR</span>
                             )}
@@ -483,7 +483,7 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
                             title="After Countermeasure Photo Proof"
                           >
                             {item.afterPhoto ? (
-                              <img src={item.afterPhoto} alt="After" className="w-full h-full object-cover" />
+                              <Check className="w-4 h-4 text-emerald-700" />
                             ) : isCompleted ? (
                               <span className="text-[9px] font-mono font-bold text-emerald-700">AFT</span>
                             ) : (
