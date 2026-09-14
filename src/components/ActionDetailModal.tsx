@@ -66,17 +66,32 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const hasDeleteAuthority = can(session, 'deleteTask');
   const canEditTask = can(session, 'editOwnDept', action);
   const isExecutive = !!session && !session.departments; // plant-wide role: PlantHead / MD / Admin
+  // "Plant Head" is unusual among plant-wide roles: unlike MD/Admin (who
+  // have no corresponding department at all — MD is excluded from
+  // TASK_DEPARTMENTS, Admin was never a real department), "Plant Head" is
+  // also a real, assignable department in TASK_DEPARTMENTS with its own
+  // dept head. So a PlantHead-role user can genuinely be the assignee
+  // (Responsible Dept) on a handshake someone else raised, and must be
+  // evaluated like a normal department participant for that specific task —
+  // not unconditionally treated as the originator, or they could approve
+  // their own submitted work and skip verification entirely.
+  const isPlantHeadRole = session?.role === 'PlantHead';
+  const isOverseer = isExecutive && !isPlantHeadRole; // MD / Admin only
 
   // Handshake detection
   const originatorDept = action.originatorDept || 'Store';
   const isHandshake = (action.originatorDept && isRaisedToOtherDept(action.originatorDept, action.dept)) || !!action.isCFT;
 
-  // Is the current viewer the originator (or executive with oversight)? Checked
+  // Is the current viewer the originator (or an MD/Admin overseer)? Checked
   // against the signed-in user's own department membership — not the
   // currently-selected filter view — so this stays correct for a multi-dept
   // head even when they're viewing an aggregate "All My Departments" filter.
-  const isOriginator = isExecutive || !!session?.departments?.some(d => d.toLowerCase() === originatorDept.toLowerCase());
-  const isTargetDept = !isExecutive && !!session?.departments?.some(d => d.toLowerCase() === action.dept.toLowerCase());
+  // A PlantHead-role user counts as originator only when "Plant Head" is
+  // actually this task's originating department, same as any other dept.
+  const isOriginator = isOverseer
+    || (isPlantHeadRole ? originatorDept === 'Plant Head' : !!session?.departments?.some(d => d.toLowerCase() === originatorDept.toLowerCase()));
+  const isTargetDept = !isOverseer
+    && (isPlantHeadRole ? action.dept === 'Plant Head' : !!session?.departments?.some(d => d.toLowerCase() === action.dept.toLowerCase()));
 
   // DSI/Kaizen classification should reflect a genuinely finished
   // improvement, not a placeholder — only checkable once the task is
@@ -191,7 +206,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const handleStatusChange = (newStatus: ActionStatus) => {
     // If it's a handshake task and current user is NOT originator, prevent setting to 'Completed'
     if (isHandshake && newStatus === 'Completed' && !isOriginator) {
-      setHandshakeNotice(`Handshake Task: Only the Originator (${originatorDept}) or Plant Head can mark this task Completed.`);
+      setHandshakeNotice(`Handshake Task: Only the Originator (${originatorDept}) or an MD/Admin overseer can mark this task Completed.`);
       return;
     }
     setHandshakeNotice(null);
@@ -324,7 +339,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                         <span>Originator Verification Actions ({originatorDept})</span>
                       </div>
                       <p className="text-[11px] text-slate-600">
-                        Inspect the Before and After photo proofs below. Only you ({originatorDept}) or the Plant Head can approve completion.
+                        Inspect the Before and After photo proofs below. Only you ({originatorDept}) or an MD/Admin overseer can approve completion.
                       </p>
 
                       {!showReworkInput ? (
@@ -667,7 +682,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             {/* Handshake Completion vs Submission Button */}
             {canEditTask && (isHandshake ? (
               isOriginator ? (
-                /* Originator or Plant Head: Can complete the handshake task */
+                /* Originator (or MD/Admin overseer): can complete the handshake task */
                 status !== 'Completed' && (
                   <button
                     type="button"
