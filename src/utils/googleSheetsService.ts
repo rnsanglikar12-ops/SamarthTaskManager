@@ -3,6 +3,73 @@ import { ActionItem } from '../types';
 const STORAGE_KEY = 'samarth_google_sheet_url';
 const LAST_SYNC_KEY = 'samarth_google_sheet_last_sync';
 
+// Apps Script Web App latency is highly variable even for identical
+// back-to-back requests (observed 2-33s, plus occasional transient 404s
+// from Google's own routing layer before the script ever runs) — see
+// PROJECT_CONTEXT.md. These give every request room to actually finish
+// before we give up on it, and let us recover from routing-layer failures
+// automatically instead of surfacing them as hard errors.
+const REQUEST_TIMEOUT_MS = 30000;
+const MAX_RETRIES = 2; // additional attempts after the first
+const RETRY_BACKOFF_MS = [1000, 2000];
+// A plain HTTP 404 from script.google.com means the request never reached
+// our doGet/doPost at all (the script itself always responds 200, even for
+// internal errors) — safe to retry. 429/5xx are also assumed transient.
+const RETRYABLE_STATUS = new Set([404, 429, 500, 502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+interface FetchRetryOptions {
+  timeoutMs?: number;
+  retries?: number;
+  // Whether to retry a request that timed out client-side. Safe for
+  // idempotent actions (reads, overwrites, deletes) where re-sending after
+  // a timeout can't corrupt data. Left false for actions like CREATE_TASK /
+  // UPLOAD_PHOTO where the first attempt may have already been processed
+  // server-side (row appended / file created) and a blind retry could
+  // create a duplicate — those should surface the timeout so the user
+  // consciously decides to retry rather than risk a silent duplicate.
+  retryOnTimeout?: boolean;
+}
+
+/**
+ * fetch() with a per-attempt timeout and automatic retry on transient
+ * failures (network errors, routing-layer 404s, 5xx). Returns the last
+ * Response even if it ended up non-ok, so callers keep their existing
+ * `!res.ok` handling unchanged.
+ */
+async function fetchWithRetry(url: string, init: RequestInit, opts: FetchRetryOptions = {}): Promise<Response> {
+  const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const retries = opts.retries ?? MAX_RETRIES;
+  const retryOnTimeout = opts.retryOnTimeout ?? true;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const isLastAttempt = attempt === retries;
+    try {
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      clearTimeout(timer);
+      if (!isLastAttempt && RETRYABLE_STATUS.has(res.status)) {
+        await sleep(RETRY_BACKOFF_MS[attempt] ?? 2000);
+        continue;
+      }
+      return res;
+    } catch (err: any) {
+      clearTimeout(timer);
+      const isTimeout = err?.name === 'AbortError';
+      if (isLastAttempt || (isTimeout && !retryOnTimeout)) {
+        throw isTimeout ? new Error('Google Sheet request timed out.') : err;
+      }
+      await sleep(RETRY_BACKOFF_MS[attempt] ?? 2000);
+    }
+  }
+  // Unreachable, but keeps TypeScript happy.
+  throw new Error('Google Sheet request failed.');
+}
+
 /**
  * Retrieve saved Google Apps Script Web App URL
  */
@@ -52,17 +119,17 @@ function updateLastSyncTime(): void {
  * Helper to safely post to Google Apps Script Web App without CORS preflight issues
  * (Uses text/plain Content-Type which avoids browser OPTIONS preflight blocks)
  */
-async function sendToAppsScript(payload: any): Promise<any> {
+async function sendToAppsScript(payload: any, opts: FetchRetryOptions = {}): Promise<any> {
   const url = getGoogleSheetUrl();
   if (!url) throw new Error('Google Sheet Web App URL is not configured.');
 
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'text/plain;charset=utf-8'
     },
     body: JSON.stringify(payload)
-  });
+  }, opts);
 
   if (!res.ok) {
     throw new Error(`Google Sheet request failed with HTTP ${res.status}`);
@@ -83,7 +150,7 @@ export async function fetchActionsFromGoogleSheet(): Promise<ActionItem[]> {
   const url = getGoogleSheetUrl();
   if (!url) throw new Error('No Google Sheet Web App URL configured.');
 
-  const res = await fetch(`${url}?action=FETCH_ALL&_t=${Date.now()}`);
+  const res = await fetchWithRetry(`${url}?action=FETCH_ALL&_t=${Date.now()}`, {});
   if (!res.ok) {
     throw new Error(`Failed to fetch from Google Sheet: HTTP ${res.status}`);
   }
@@ -149,6 +216,30 @@ interface PhotoLinks {
 }
 
 /**
+ * Upload a single photo to Drive immediately (at selection time, not at
+ * task-save time) and return its Drive link. Keeping this as its own call
+ * means CREATE_TASK/UPDATE_TASK never carry base64 image data — just the
+ * short link string, like any other field, so a save is not blocked on
+ * however long the photo takes to upload.
+ */
+export async function uploadPhotoToGoogleSheet(base64: string, filename?: string): Promise<string | null> {
+  if (!isGoogleSheetConnected()) return null;
+  try {
+    // No retry on timeout: a slow UPLOAD_PHOTO may have already saved the
+    // file to Drive server-side, and a blind retry would create a duplicate.
+    const result = await sendToAppsScript({ action: 'UPLOAD_PHOTO', base64, filename }, { retryOnTimeout: false });
+    if (result?.status === 'success' && result.url) {
+      return String(result.url);
+    }
+    console.warn('Google Sheet rejected the photo upload:', result);
+    return null;
+  } catch (err) {
+    console.warn('Failed to upload photo to Google Sheet:', err);
+    return null;
+  }
+}
+
+/**
  * Push an updated task row to the Google Sheet. Returns the canonical
  * (Drive-hosted) photo links on success so the caller can replace any raw
  * base64 it's still holding, or null on failure.
@@ -179,10 +270,13 @@ export async function updateActionInGoogleSheet(action: ActionItem): Promise<Pho
 export async function createActionInGoogleSheet(action: Omit<ActionItem, 'id'>): Promise<(PhotoLinks & { id: string }) | null> {
   if (!isGoogleSheetConnected()) return null;
   try {
+    // No retry on timeout: a slow CREATE_TASK may have already appended the
+    // row server-side (IDs are assigned atomically, with no dedup check), so
+    // a blind retry risks creating a duplicate task.
     const result = await sendToAppsScript({
       action: 'CREATE_TASK',
       data: toSheetTaskPayload(action)
-    });
+    }, { retryOnTimeout: false });
     if (result?.status === 'success' && result.createdId) {
       updateLastSyncTime();
       return {
@@ -259,7 +353,7 @@ export async function testGoogleSheetConnection(testUrl?: string): Promise<{ suc
   }
 
   try {
-    const res = await fetch(`${url}?action=PING&_t=${Date.now()}`);
+    const res = await fetchWithRetry(`${url}?action=PING&_t=${Date.now()}`, {});
     if (!res.ok) {
       return { success: false, message: `Server returned HTTP status ${res.status}` };
     }
@@ -310,7 +404,7 @@ export async function fetchUsers(): Promise<AppsScriptUserRecord[]> {
   const url = getGoogleSheetUrl();
   if (!url) throw new Error('Google Sheet Web App URL is not configured.');
 
-  const res = await fetch(`${url}?action=FETCH_USERS&_t=${Date.now()}`);
+  const res = await fetchWithRetry(`${url}?action=FETCH_USERS&_t=${Date.now()}`, {});
   if (!res.ok) {
     throw new Error(`Failed to fetch users: HTTP ${res.status}`);
   }
