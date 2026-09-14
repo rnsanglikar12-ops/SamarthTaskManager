@@ -118,8 +118,6 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     if (recurrenceOption.toLowerCase().includes('daily')) normalizedRecurrence = 'Daily';
     else if (recurrenceOption.toLowerCase().includes('weekly') || recurrenceOption.toLowerCase().includes('pm')) normalizedRecurrence = 'Weekly';
 
-    const isKaizen = originTrigger.includes('Kaizen');
-
     const effectiveBroadcast = isBroadcast;
     const effectiveDept = dept;
 
@@ -128,7 +126,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       priority,
       recurrence: normalizedRecurrence,
       dept: effectiveBroadcast ? 'All Departments' : effectiveDept,
-      desc: isKaizen && !desc.includes('[DSI Kaizen]') ? `⭐ [DSI Kaizen] ${desc}` : desc,
+      desc,
       owner: effectiveBroadcast ? 'All Department Leads' : (owner || getDefaultAssignee(dept)),
       deadline: targetDeadline || '2026-09-18',
       evidence: 'Photo Proof',
@@ -137,7 +135,11 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       attachedPhoto: problemPhoto || undefined,
       timestamp: new Date().toISOString(),
       originatorDept: effectiveBroadcast ? (lockedDepts?.[0] || 'Plant Head') : originatorDept,
-      isKaizen,
+      // New tasks are never Kaizen/DSI at creation — that's only offered
+      // once a task is Completed with before/after photos + notes (see the
+      // gating in ActionDetailModal). "Origin/Trigger" above is purely
+      // descriptive context, unrelated to the DSI flag.
+      isKaizen: false,
       isBroadcast,
       machineNote: machineEqNo || undefined
     });
