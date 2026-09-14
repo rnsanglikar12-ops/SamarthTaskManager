@@ -50,10 +50,17 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   const [dept, setDept] = useState(lockedDepts?.[0] || 'Quality');
   // Originating department — who raised the task. Locked to the signed-in
   // DeptHead's own department (that's what makes dept !== originatorDept a
-  // real CFT handshake); if they head several, pick among just those; free
-  // for plant-wide roles, defaulting to "no handshake" (same as the
-  // responsible department) unless changed.
+  // real CFT handshake); if they head several, pick among just those; freely
+  // selectable for plant-wide roles too (e.g. Plant Head raising an issue
+  // against Quality), defaulting to "no handshake" (same as the responsible
+  // department) until explicitly changed — see originatorDeptTouched below.
   const [originatorDept, setOriginatorDept] = useState(lockedDepts?.[0] || 'Quality');
+  // Whether a plant-wide user has deliberately picked a different
+  // Originating Department. Until they do, it auto-tracks Responsible
+  // Department (see the sync effect below) so switching Responsible
+  // Department doesn't leave a stale Originating Department behind and
+  // create an accidental, unintended handshake.
+  const [originatorDeptTouched, setOriginatorDeptTouched] = useState(false);
   const [owner, setOwner] = useState(getDefaultAssignee(lockedDepts?.[0] || 'Quality'));
   const [problemPhoto, setProblemPhoto] = useState<string>('');
 
@@ -67,15 +74,16 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   }, [lockedDepts]);
 
   // Plant-wide roles (PlantHead/MD/Admin) don't have an inherent "home"
-  // department, so Originating Department just tracks whatever Responsible
-  // Department is set to — it's a locked/derived value, not an independent
-  // picker. Letting it drift out of sync (e.g. left over from a previous
-  // selection) was creating accidental, confusing "handshake" tasks.
+  // department, so until they deliberately pick a different Originating
+  // Department (see the select below), it tracks whatever Responsible
+  // Department is set to — otherwise switching Responsible Department would
+  // leave a stale Originating Department behind and create an accidental,
+  // unintended handshake.
   useEffect(() => {
-    if (!isDeptScoped) {
+    if (!isDeptScoped && !originatorDeptTouched) {
       setOriginatorDept(dept);
     }
-  }, [dept, isDeptScoped]);
+  }, [dept, isDeptScoped, originatorDeptTouched]);
 
   // The assignee pool is scoped to whichever department is responsible for
   // executing the task; each department has a default placeholder assignee
@@ -250,13 +258,19 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                   ))}
                 </select>
               ) : (
-                <div
-                  className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 flex items-center gap-1.5"
-                  title="Plant-wide roles raise tasks as the responsible department itself — this always matches Responsible Department below."
+                <select
+                  value={originatorDept}
+                  onChange={(e) => {
+                    setOriginatorDept(e.target.value);
+                    setOriginatorDeptTouched(true);
+                  }}
+                  title="Defaults to Responsible Department (no handshake). Pick a different department to raise a genuine CFT handshake — e.g. Plant Head raising an issue against Quality — which routes completion through this department for verification."
+                  className="w-full py-2.5 px-3 bg-white border border-slate-300 rounded-xl font-medium text-slate-800 focus:border-blue-500 outline-none shadow-2xs"
                 >
-                  <Lock className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{dept} (Same as Responsible Dept)</span>
-                </div>
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{d}{d === dept ? ' (Same as Responsible — no handshake)' : ''}</option>
+                  ))}
+                </select>
               )}
             </div>
           </div>
