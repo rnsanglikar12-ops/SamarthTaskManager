@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { OnePointSheetModal } from './OnePointSheetModal';
 import { SAMARTH_ORG_STRUCTURE } from '../data/orgStructure';
-import { isRaisedToOtherDept, isKaizenAction } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, isKaizenAction, getTodayStr } from '../data/sentinelDataLoader';
 
 interface KaizenHubViewProps {
   actions: ActionItem[];
@@ -60,6 +60,7 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
   const [sheetModalAction, setSheetModalAction] = useState<ActionItem | null>(null);
   const [sortField, setSortField] = useState<'id' | 'dept' | 'deadline'>('id');
   const [sortAsc, setSortAsc] = useState(false);
+  const todayStr = getTodayStr();
 
   // Extract Kaizen & DSI initiatives from actions
   const kaizenActions = useMemo(() => actions.filter(isKaizenAction), [actions]);
@@ -370,7 +371,7 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
               ) : (
                 filteredKaizens.map((item) => {
                   const isCompleted = item.status === 'Completed';
-                  const isDue = item.deadline === '2026-09-09' || item.deadline < '2026-09-11';
+                  const isDue = item.deadline <= todayStr;
                   const cleanDesc = item.desc.replace(/⭐\s*\[DSI Kaizen\]/i, '').trim();
 
                   return (

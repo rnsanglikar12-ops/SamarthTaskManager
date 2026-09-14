@@ -17,9 +17,16 @@ export function exportActionsToCsv(actions: ActionItem[], filename = 'samarth_in
     'Kaizen Benefit'
   ];
 
+  // Free-text fields (desc, actionNotes, owner, ...) come from real users and
+  // can start with =, +, -, or @ — Excel/Sheets treats a cell starting with
+  // one of those as a formula on open, not literal text (CSV/formula
+  // injection). Prefixing with a straight quote forces it to stay literal
+  // without changing the visible value.
   const escapeCsv = (str: string | number | boolean | undefined | null) => {
     if (str === undefined || str === null) return '""';
-    const s = String(str).replace(/"/g, '""');
+    let s = String(str);
+    if (/^[=+\-@]/.test(s)) s = `'${s}`;
+    s = s.replace(/"/g, '""');
     return `"${s}"`;
   };
 

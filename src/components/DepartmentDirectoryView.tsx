@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { SAMARTH_ORG_STRUCTURE, MENTOR_NAME } from '../data/orgStructure';
+import { getTodayStr } from '../data/sentinelDataLoader';
 import { ActionItem } from '../types';
 import {
   Building2,
@@ -41,10 +42,12 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
     isSingleDept ? lockedDepts![0] : 'All Departments (Plant-wide)'
   );
 
+  const todayStr = getTodayStr();
+
   // Department statistics
   const deptStats = useMemo(() => {
     const stats: Record<string, { total: number; completed: number; pending: number; inProcess: number; overdue: number; priorityA: number }> = {};
-    
+
     actions.forEach(a => {
       const d = a.dept || 'General';
       if (!stats[d]) {
@@ -63,13 +66,13 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
         stats[d].priorityA += 1;
       }
 
-      if (a.status !== 'Completed' && (a.deadline === '2026-09-09' || a.deadline < '2026-09-11')) {
+      if (a.status !== 'Completed' && a.deadline <= todayStr) {
         stats[d].overdue += 1;
       }
     });
 
     return stats;
-  }, [actions]);
+  }, [actions, todayStr]);
 
   // Operational departments (excluding MD since MD doesn't attract tasks)
   const departmentsList = useMemo(() => {
@@ -92,7 +95,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
     if (selectedVelocityDept === 'All Departments (Plant-wide)') {
       return actions;
     }
-    return actions.filter(a => a.dept.toLowerCase() === selectedVelocityDept.toLowerCase());
+    return actions.filter(a => (a.dept || 'General').toLowerCase() === selectedVelocityDept.toLowerCase());
   }, [actions, selectedVelocityDept]);
 
   // Velocity calculations matching Screenshot 3
@@ -386,11 +389,15 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
             <div className="space-y-3 pt-2 max-h-[480px] overflow-y-auto pr-1">
               {complianceRanking.map((dept, idx) => {
                 const meetsTarget = dept.rate >= 80;
+                const isLocked = !!lockedDepts && !lockedDepts.includes(dept.deptName);
                 return (
-                  <div 
+                  <div
                     key={dept.deptName}
-                    onClick={() => onSelectDepartment(dept.deptName)}
-                    className="p-3 bg-slate-50 hover:bg-blue-50/50 border border-slate-200/80 rounded-xl transition-all cursor-pointer space-y-2 group"
+                    onClick={isLocked ? undefined : () => onSelectDepartment(dept.deptName)}
+                    title={isLocked ? `Access restricted. You are locked to: ${lockedDepts!.join(', ')}.` : undefined}
+                    className={`p-3 bg-slate-50 border border-slate-200/80 rounded-xl transition-all space-y-2 group ${
+                      isLocked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-blue-50/50 cursor-pointer'
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -398,12 +405,13 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                           #{idx + 1}
                         </span>
                         <div>
-                          <span className="font-bold text-xs text-slate-900 group-hover:text-blue-600 transition-colors">
+                          <span className={`font-bold text-xs text-slate-900 transition-colors ${isLocked ? '' : 'group-hover:text-blue-600'}`}>
                             {dept.deptName}
                           </span>
                           <span className="text-[11px] text-slate-500 ml-2">
                             (HOD: {dept.deptHead})
                           </span>
+                          {isLocked && <Lock className="w-3 h-3 text-slate-400 inline-block ml-1.5 align-text-top" />}
                         </div>
                       </div>
 
@@ -456,16 +464,21 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
             <div className="space-y-3 pt-2 max-h-[480px] overflow-y-auto pr-1">
               {filteredDepartments.map((dept) => {
                 const stats = deptStats[dept.deptName] || { total: 0, completed: 0, inProcess: 0, pending: 0, overdue: 0 };
+                const isLocked = !!lockedDepts && !lockedDepts.includes(dept.deptName);
                 return (
-                  <div 
+                  <div
                     key={dept.deptName}
-                    onClick={() => onSelectDepartment(dept.deptName)}
-                    className="p-3.5 bg-white border border-slate-200 rounded-xl hover:border-blue-300 transition-all cursor-pointer shadow-2xs space-y-2 group"
+                    onClick={isLocked ? undefined : () => onSelectDepartment(dept.deptName)}
+                    title={isLocked ? `Access restricted. You are locked to: ${lockedDepts!.join(', ')}.` : undefined}
+                    className={`p-3.5 bg-white border border-slate-200 rounded-xl transition-all shadow-2xs space-y-2 group ${
+                      isLocked ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-300 cursor-pointer'
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-bold text-xs text-slate-900 group-hover:text-blue-600 transition-colors">
+                        <h4 className={`font-bold text-xs text-slate-900 transition-colors flex items-center gap-1.5 ${isLocked ? '' : 'group-hover:text-blue-600'}`}>
                           {dept.deptName}
+                          {isLocked && <Lock className="w-3 h-3 text-slate-400" />}
                         </h4>
                         <p className="text-[11px] text-slate-500">
                           Lead: <strong className="text-slate-700">{dept.deptHead}</strong>

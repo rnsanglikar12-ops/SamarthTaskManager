@@ -1,5 +1,21 @@
 import { ActionItem } from '../types';
 
+// Today's date as 'YYYY-MM-DD', matching the format deadlines are stored in
+// (e.g. targetDate). Local calendar date, not UTC — toISOString().slice(0,10)
+// would roll over at UTC midnight, which is 5:30am in this plant's timezone
+// (IST), misclassifying tasks as overdue/not-overdue for that gap. This is
+// the single source of truth for "today" — every overdue calculation in the
+// app (App.tsx, ActionRegisterView.tsx, KaizenHubView.tsx,
+// DepartmentDirectoryView.tsx) must use this, not a separate hardcoded or
+// re-derived value, so they can't drift out of sync with each other again.
+export function getTodayStr(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 // Helper to check if a task was raised to another department (Inter-departmental CFT Handshake)
 export function isRaisedToOtherDept(originatorDept?: string, targetDept?: string): boolean {
   if (!originatorDept || !targetDept) return false;

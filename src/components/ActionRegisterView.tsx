@@ -4,7 +4,7 @@ import {
   FilterState, 
   ActionStatus 
 } from '../types';
-import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, getTodayStr } from '../data/sentinelDataLoader';
 import { TASK_DEPARTMENTS, combineAllAssignees } from '../data/orgStructure';
 import { Supervisor } from '../utils/googleSheetsService';
 import { 
@@ -64,7 +64,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all');
 
   // Today's operational date
-  const TODAY_STR = '2026-09-11';
+  const TODAY_STR = getTodayStr();
 
   // One person can head several departments — a single dept stays a hard,
   // non-interactive lock; more than one becomes a dropdown constrained to

@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, Suspense, lazy } from 'react';
 import { ActionItem, FilterState, SentinelStats, ActionStatus } from './types';
 import {
   getInitialActions,
   saveActionsToStorage,
   isRaisedToOtherDept,
-  isKaizenAction
+  isKaizenAction,
+  getTodayStr
 } from './data/sentinelDataLoader';
 import {
   subscribeToTabBroadcast,
@@ -12,7 +13,10 @@ import {
 } from './utils/syncService';
 import { Header, NavTab } from './components/Header';
 import { StatsOverview } from './components/StatsOverview';
-import { AnalyticsView } from './components/AnalyticsView';
+// Lazy-loaded: recharts (its only consumer) is a meaningful chunk of the
+// bundle, and Cockpit isn't the default tab (Master Matrix is) — no reason
+// to make every page load pay for it before the user ever visits Cockpit.
+const AnalyticsView = lazy(() => import('./components/AnalyticsView').then((m) => ({ default: m.AnalyticsView })));
 import { ActionRegisterView } from './components/ActionRegisterView';
 import { DepartmentDirectoryView } from './components/DepartmentDirectoryView';
 import { KaizenHubView } from './components/KaizenHubView';
@@ -205,7 +209,7 @@ export default function App() {
     let kaizenCount = 0;
     let overdueCount = 0;
 
-    const today = '2026-09-11';
+    const today = getTodayStr();
 
     visibleActions.forEach(a => {
       if (a.status === 'Completed') completed++;
@@ -483,20 +487,22 @@ export default function App() {
                 if (type === 'kaizen') setGuardedFilters(prev => ({ ...prev, onlyKaizen: true }));
               }}
             />
-            <AnalyticsView
-              actions={visibleActions}
-              lockedDept={lockedDepts?.[0] ?? null}
-              onSelectDept={(dept) => {
-                if (!guardDeptSelect(dept)) return;
-                setGuardedFilters(prev => ({ ...prev, dept }));
-                setActiveTab('matrix');
-              }}
-              onSelectPriority={(priority) => {
-                if (lockedDepts) return;
-                setGuardedFilters(prev => ({ ...prev, priority }));
-                setActiveTab('matrix');
-              }}
-            />
+            <Suspense fallback={<div className="text-center py-10 text-xs text-slate-400">Loading analytics…</div>}>
+              <AnalyticsView
+                actions={visibleActions}
+                lockedDept={lockedDepts?.[0] ?? null}
+                onSelectDept={(dept) => {
+                  if (!guardDeptSelect(dept)) return;
+                  setGuardedFilters(prev => ({ ...prev, dept }));
+                  setActiveTab('matrix');
+                }}
+                onSelectPriority={(priority) => {
+                  if (lockedDepts) return;
+                  setGuardedFilters(prev => ({ ...prev, priority }));
+                  setActiveTab('matrix');
+                }}
+              />
+            </Suspense>
           </div>
         )}
 
