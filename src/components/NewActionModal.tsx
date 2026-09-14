@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ActionItem, Priority, Recurrence } from '../types';
-import { TASK_DEPARTMENTS, getAssigneesForDept, getDefaultAssignee } from '../data/orgStructure';
+import { TASK_DEPARTMENTS, combineAssigneesForDept, getDefaultAssignee } from '../data/orgStructure';
+import { Supervisor } from '../utils/googleSheetsService';
 import { uploadPhotoToGoogleSheet } from '../utils/googleSheetsService';
 import { compressImage } from '../utils/imageUtils';
 import {
@@ -23,13 +24,15 @@ interface NewActionModalProps {
   onClose: () => void;
   onAdd: (newItem: Omit<ActionItem, 'id'>) => Promise<boolean>;
   lockedDepts?: string[] | null;
+  supervisors?: Supervisor[];
 }
 
 export const NewActionModal: React.FC<NewActionModalProps> = ({
   isOpen,
   onClose,
   onAdd,
-  lockedDepts = null
+  lockedDepts = null,
+  supervisors = []
 }) => {
   if (!isOpen) return null;
 
@@ -98,7 +101,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   }, [dept]);
 
   const departments = TASK_DEPARTMENTS;
-  const assigneeOptions = getAssigneesForDept(dept);
+  const assigneeOptions = combineAssigneesForDept(dept, supervisors);
 
   // Helper to calculate Next Saturday
   const handleSetNextSaturday = () => {

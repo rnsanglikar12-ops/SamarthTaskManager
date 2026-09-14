@@ -20,14 +20,15 @@ export type Permission =
   | 'editAnyDept'
   | 'reviseDeadline'
   | 'deleteTask'
-  | 'manageUsers';
+  | 'manageUsers'
+  | 'manageSupervisors';
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   Viewer: ['view'],
-  DeptHead: ['view', 'createTask', 'editOwnDept'],
-  PlantHead: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask'],
-  MD: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask'],
-  Admin: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageUsers'],
+  DeptHead: ['view', 'createTask', 'editOwnDept', 'manageSupervisors'],
+  PlantHead: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageSupervisors'],
+  MD: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageSupervisors'],
+  Admin: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageUsers', 'manageSupervisors'],
 };
 
 type ScopedTask = Pick<ActionItem, 'dept' | 'originatorDept'>;

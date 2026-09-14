@@ -459,3 +459,37 @@ export async function changePassword(
   });
   return result?.status === 'success';
 }
+
+export interface Supervisor {
+  name: string;
+  dept: string;
+}
+
+/**
+ * Fetch every supervisor (name-only, no login) across all departments.
+ * Used to populate the Assignee dropdown alongside the static org structure.
+ */
+export async function fetchSupervisors(): Promise<Supervisor[]> {
+  const url = getGoogleSheetUrl();
+  if (!url) throw new Error('Google Sheet Web App URL is not configured.');
+
+  const res = await fetchWithRetry(`${url}?action=FETCH_SUPERVISORS&_t=${Date.now()}`, {});
+  if (!res.ok) {
+    throw new Error(`Failed to fetch supervisors: HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  if (data && Array.isArray(data.supervisors)) {
+    return data.supervisors;
+  }
+  throw new Error('Unexpected data format received while fetching supervisors.');
+}
+
+export async function createSupervisor(supervisor: Supervisor): Promise<{ success: boolean; message?: string }> {
+  const result = await sendToAppsScript({ action: 'CREATE_SUPERVISOR', data: supervisor });
+  return { success: result?.status === 'success', message: result?.message };
+}
+
+export async function deleteSupervisor(supervisor: Supervisor): Promise<boolean> {
+  const result = await sendToAppsScript({ action: 'DELETE_SUPERVISOR', ...supervisor });
+  return result?.status === 'success';
+}

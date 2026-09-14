@@ -5,7 +5,8 @@ import {
   ActionStatus 
 } from '../types';
 import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
-import { TASK_DEPARTMENTS, ALL_ASSIGNEES } from '../data/orgStructure';
+import { TASK_DEPARTMENTS, combineAllAssignees } from '../data/orgStructure';
+import { Supervisor } from '../utils/googleSheetsService';
 import { 
   Search, 
   Sparkles, 
@@ -39,6 +40,7 @@ interface ActionRegisterViewProps {
   onOpenNewModal: () => void;
   onDelete?: (id: string) => void;
   lockedDepts?: string[] | null;
+  supervisors?: Supervisor[];
 }
 
 type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'closed';
@@ -51,7 +53,8 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   onUpdateStatus,
   onOpenNewModal,
   onDelete,
-  lockedDepts = null
+  lockedDepts = null,
+  supervisors = []
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
@@ -74,8 +77,9 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   // own department(s) here, never the full plant list.
   const departments = lockedDepts ?? TASK_DEPARTMENTS;
 
-  // Assignees list — every department's default placeholder + dept head + supervisors
-  const assigneesList = ALL_ASSIGNEES;
+  // Assignees list — every department's default placeholder + dept head +
+  // static org-structure supervisors + dynamically-added supervisors
+  const assigneesList = useMemo(() => combineAllAssignees(supervisors), [supervisors]);
 
   // Filter actions
   const filteredActions = useMemo(() => {

@@ -217,6 +217,7 @@ function doGet(e) {
     const action = (e && e.parameter && e.parameter.action) || 'FETCH_ALL';
 
     if (action === 'FETCH_USERS') return doFetchUsers();
+    if (action === 'FETCH_SUPERVISORS') return doFetchSupervisors();
 
     const sheet = getOrCreateSheet();
 
@@ -291,6 +292,8 @@ function doPost(e) {
     if (action === 'UPDATE_USER') return doUpdateUser(payload);
     if (action === 'DELETE_USER') return doDeleteUser(payload);
     if (action === 'CHANGE_PASSWORD') return doChangePassword(payload);
+    if (action === 'CREATE_SUPERVISOR') return doCreateSupervisor(payload);
+    if (action === 'DELETE_SUPERVISOR') return doDeleteSupervisor(payload);
 
     if (action === 'UPLOAD_PHOTO') {
       // Dedicated upload endpoint so a photo only ever travels over the wire
@@ -723,6 +726,101 @@ function doChangePassword(payload) {
     sheet.getRange(found.rowIndex, 3).setValue(payload.newPasswordHash);
     sheet.getRange(found.rowIndex, 6).setValue(!!payload.mustChangePassword);
     return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ============================================================
+// SUPERVISOR MANAGEMENT
+// ============================================================
+//
+// Supervisors are lightweight, name-only entries scoped to a department —
+// unlike Users, they have no login (no password, no role). They exist
+// purely to populate the Assignee dropdown when creating/editing a task,
+// so Admin/PlantHead/MD/DeptHead can add shopfloor staff without a code
+// change + redeploy every time. Enforcement of who may add/remove a
+// supervisor for which department is frontend-only, matching every other
+// action on this Web App (CREATE_TASK, CREATE_USER, etc. are the same —
+// there is no per-request auth on this deployment).
+
+const SUPERVISORS_SHEET_NAME = 'Supervisors';
+const SUPERVISORS_HEADERS = ['Name', 'Department', 'CreatedAt'];
+
+function getOrCreateSupervisorsSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SUPERVISORS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SUPERVISORS_SHEET_NAME);
+    sheet.getRange(1, 1, 1, SUPERVISORS_HEADERS.length).setValues([SUPERVISORS_HEADERS]);
+    sheet.getRange(1, 1, 1, SUPERVISORS_HEADERS.length)
+      .setBackground('#1d64ec')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function doFetchSupervisors() {
+  try {
+    const sheet = getOrCreateSupervisorsSheet_();
+    const data = sheet.getDataRange().getValues();
+    const supervisors = [];
+    for (let i = 1; i < data.length; i++) {
+      if (!data[i][0]) continue;
+      supervisors.push({ name: String(data[i][0]), dept: String(data[i][1] || '') });
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success', supervisors: supervisors }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doCreateSupervisor(payload) {
+  try {
+    const sheet = getOrCreateSupervisorsSheet_();
+    const item = payload.data || {};
+    const name = String(item.name || '').trim();
+    const dept = String(item.dept || '').trim();
+    if (!name || !dept) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Name and department are required' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).toLowerCase() === name.toLowerCase() && String(data[i][1]).toLowerCase() === dept.toLowerCase()) {
+        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'This supervisor already exists in this department' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+    sheet.appendRow([name, dept, new Date().toISOString()]);
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doDeleteSupervisor(payload) {
+  try {
+    const sheet = getOrCreateSupervisorsSheet_();
+    const name = String(payload.name || '').trim();
+    const dept = String(payload.dept || '').trim();
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).toLowerCase() === name.toLowerCase() && String(data[i][1]).toLowerCase() === dept.toLowerCase()) {
+        sheet.deleteRow(i + 1);
+        return ContentService.createTextOutput(JSON.stringify({ status: 'success' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Supervisor not found' }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))

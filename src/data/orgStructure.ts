@@ -134,3 +134,17 @@ export function getAssigneesForDept(deptName: string): string[] {
 export const ALL_ASSIGNEES: string[] = Array.from(
   new Set(TASK_DEPARTMENTS.flatMap((dept) => getAssigneesForDept(dept)))
 );
+
+// Unions the static org-structure assignees for a department with
+// dynamically-added supervisors (see SupervisorManagementModal) for that
+// same department, deduped. Dynamic supervisors are fetched at runtime, so
+// callers pass in whatever they currently have loaded.
+export function combineAssigneesForDept(deptName: string, dynamicSupervisors: { name: string; dept: string }[]): string[] {
+  const dynamicNames = dynamicSupervisors.filter((s) => s.dept === deptName).map((s) => s.name);
+  return Array.from(new Set([...getAssigneesForDept(deptName), ...dynamicNames]));
+}
+
+// Plant-wide equivalent of combineAssigneesForDept, for the global Assignee filter.
+export function combineAllAssignees(dynamicSupervisors: { name: string; dept: string }[]): string[] {
+  return Array.from(new Set([...ALL_ASSIGNEES, ...dynamicSupervisors.map((s) => s.name)]));
+}

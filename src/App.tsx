@@ -19,6 +19,7 @@ import { KaizenHubView } from './components/KaizenHubView';
 import { ActionDetailModal } from './components/ActionDetailModal';
 import { NewActionModal } from './components/NewActionModal';
 import { UserManagementModal } from './components/UserManagementModal';
+import { SupervisorManagementModal } from './components/SupervisorManagementModal';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginScreen } from './components/LoginScreen';
 import {
@@ -26,7 +27,9 @@ import {
   updateActionInGoogleSheet,
   createActionInGoogleSheet,
   deleteActionInGoogleSheet,
-  fetchActionsFromGoogleSheet
+  fetchActionsFromGoogleSheet,
+  fetchSupervisors,
+  Supervisor
 } from './utils/googleSheetsService';
 import { AuthUser, can, isDeptInScope, getSession, setSession as persistSession, clearSession } from './utils/auth';
 import { CheckCircle2, Calendar, RotateCw, Users, Crown, Lock } from 'lucide-react';
@@ -39,6 +42,8 @@ export default function App() {
   const [selectedAction, setSelectedAction] = useState<ActionItem | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState<boolean>(false);
   const [isUserMgmtModalOpen, setIsUserMgmtModalOpen] = useState<boolean>(false);
+  const [isSupervisorMgmtModalOpen, setIsSupervisorMgmtModalOpen] = useState<boolean>(false);
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -100,6 +105,19 @@ export default function App() {
     setFilters(prev => ({ ...prev, dept: '' }));
   }, []);
 
+  // Supervisors (name-only, department-scoped assignee options) — fetched
+  // once alongside tasks below, and re-fetched after an add/remove via
+  // SupervisorManagementModal's onSupervisorsChanged callback.
+  const loadSupervisors = useCallback(async () => {
+    if (!isGoogleSheetConnected()) return;
+    try {
+      const fresh = await fetchSupervisors();
+      setSupervisors(fresh || []);
+    } catch (err) {
+      console.warn('Failed to load supervisors:', err);
+    }
+  }, []);
+
   // Task data loading: fetched once when the page opens, and again only when
   // the user explicitly clicks Refresh (handleRefresh) — no background
   // polling. Cross-tab propagation of THIS tab's own edits (via
@@ -122,6 +140,8 @@ export default function App() {
         console.warn('Google Sheet sync failed, using local cache:', err);
       }
     })();
+
+    loadSupervisors();
 
     // Instant cross-tab messaging via BroadcastChannel (local relay only)
     const unsubscribeBroadcast = subscribeToTabBroadcast((data) => {
@@ -411,6 +431,7 @@ export default function App() {
         session={session}
         onLogout={handleLogout}
         onOpenUserManagement={() => setIsUserMgmtModalOpen(true)}
+        onOpenSupervisorManagement={() => setIsSupervisorMgmtModalOpen(true)}
         onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
         currentDept={filters.dept}
         onSelectDept={(dept) => {
@@ -490,6 +511,7 @@ export default function App() {
             onOpenNewModal={() => setIsNewModalOpen(true)}
             onDelete={handleDeleteAction}
             lockedDepts={lockedDepts}
+            supervisors={supervisors}
           />
         )}
 
@@ -525,6 +547,7 @@ export default function App() {
               onOpenNewModal={() => setIsNewModalOpen(true)}
               onDelete={handleDeleteAction}
               lockedDepts={lockedDepts}
+              supervisors={supervisors}
             />
           </div>
         )}
@@ -561,6 +584,7 @@ export default function App() {
               onOpenNewModal={() => setIsNewModalOpen(true)}
               onDelete={handleDeleteAction}
               lockedDepts={lockedDepts}
+              supervisors={supervisors}
             />
           </div>
         )}
@@ -597,6 +621,7 @@ export default function App() {
               onOpenNewModal={() => setIsNewModalOpen(true)}
               onDelete={handleDeleteAction}
               lockedDepts={lockedDepts}
+              supervisors={supervisors}
             />
           </div>
         )}
@@ -640,6 +665,7 @@ export default function App() {
         onClose={() => setIsNewModalOpen(false)}
         onAdd={handleAddAction}
         lockedDepts={lockedDepts}
+        supervisors={supervisors}
       />
 
       {/* User Management Modal (Admin only) */}
@@ -648,6 +674,16 @@ export default function App() {
           isOpen={isUserMgmtModalOpen}
           onClose={() => setIsUserMgmtModalOpen(false)}
           currentUsername={session.username}
+        />
+      )}
+
+      {/* Supervisor Management Modal (Admin/PlantHead/MD/DeptHead) */}
+      {can(session, 'manageSupervisors') && (
+        <SupervisorManagementModal
+          isOpen={isSupervisorMgmtModalOpen}
+          onClose={() => setIsSupervisorMgmtModalOpen(false)}
+          lockedDepts={lockedDepts}
+          onSupervisorsChanged={loadSupervisors}
         />
       )}
 

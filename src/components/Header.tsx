@@ -36,6 +36,7 @@ interface HeaderProps {
   session: AuthUser;
   onLogout: () => void;
   onOpenUserManagement: () => void;
+  onOpenSupervisorManagement: () => void;
   onOpenChangePassword: () => void;
   currentDept?: string;
   onSelectDept?: (dept: string) => void;
@@ -74,6 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
   session,
   onLogout,
   onOpenUserManagement,
+  onOpenSupervisorManagement,
   onOpenChangePassword,
   currentDept = '',
   onSelectDept,
@@ -142,6 +144,18 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <UserCog className="w-3.5 h-3.5 text-blue-600" />
           <span>Manage Users</span>
+        </button>
+      )}
+      {can(session, 'manageSupervisors') && (
+        <button
+          onClick={() => {
+            onOpenSupervisorManagement();
+            closeMenu();
+          }}
+          className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors rounded-lg"
+        >
+          <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Manage Supervisors</span>
         </button>
       )}
       <button
