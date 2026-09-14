@@ -8,12 +8,31 @@ interface OnePointSheetModalProps {
   action: ActionItem | null;
 }
 
+// Stored photo URLs are Drive links meant for click-through viewing
+// (drive.google.com/uc?export=view&id=... or .../file/d/ID/view), not
+// hotlinked embedding — Google's uc?export=view endpoint in particular no
+// longer reliably serves raw image bytes to an <img> tag (it often returns
+// an interstitial/redirect instead), so photos silently fail to render here
+// and when printed. This sheet actually needs a real embedded image, so we
+// derive Drive's dedicated thumbnail endpoint from whichever URL shape is
+// stored — that one reliably serves image bytes for any file shared
+// "Anyone with the link."
+function toEmbeddableDriveUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  const match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (!match) return url;
+  return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+}
+
 export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
   isOpen,
   onClose,
   action
 }) => {
   if (!isOpen || !action) return null;
+
+  const printableBeforePhoto = toEmbeddableDriveUrl(action.attachedPhoto);
+  const printableAfterPhoto = toEmbeddableDriveUrl(action.afterPhoto);
 
   const handlePrint = () => {
     window.print();
@@ -127,11 +146,11 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
                   <span className="text-[10px] font-mono text-slate-400">Initial State</span>
                 </div>
                 <div className="w-full h-44 bg-slate-100 rounded border border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
-                  {action.attachedPhoto ? (
-                    <img 
-                      src={action.attachedPhoto} 
-                      alt="Before" 
-                      className="w-full h-full object-cover" 
+                  {printableBeforePhoto ? (
+                    <img
+                      src={printableBeforePhoto}
+                      alt="Before"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     <div className="text-center p-3 text-slate-400">
@@ -151,11 +170,11 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
                   <span className="text-[10px] font-mono text-emerald-600 font-bold">Standardized</span>
                 </div>
                 <div className="w-full h-44 bg-emerald-50/40 rounded border border-dashed border-emerald-300 flex items-center justify-center overflow-hidden">
-                  {action.afterPhoto ? (
-                    <img 
-                      src={action.afterPhoto} 
-                      alt="After" 
-                      className="w-full h-full object-cover" 
+                  {printableAfterPhoto ? (
+                    <img
+                      src={printableAfterPhoto}
+                      alt="After"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     <div className="text-center p-3 text-emerald-600">
