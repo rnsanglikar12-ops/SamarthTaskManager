@@ -625,25 +625,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer matching corporate standards */}
-      <footer className="bg-white border-t border-slate-200 py-3.5 text-center text-xs text-slate-500 select-none">
-        <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
-          <span>
-            Samarth Industries © {new Date().getFullYear()} • Chakan Industrial Area, Phase II, Pune
-          </span>
-          <div className="flex items-center gap-3 text-slate-500 text-[11px]">
-            <span className="text-emerald-700 font-semibold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Live Matrix v5.0 • Cloud Synced
-            </span>
-            <span>•</span>
-            <span>IATF 16949:2016 Certified</span>
-            <span>•</span>
-            <span>Mentor: Mr. Sanglikar</span>
-          </div>
-        </div>
-      </footer>
-
       {/* Action Detail Modal (with Plant Head/MD/Admin date revision & deletion controls and Handshake verification) */}
       <ActionDetailModal
         action={selectedAction}
