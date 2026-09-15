@@ -173,11 +173,24 @@ function actionToRow(action: Omit<ActionItem, 'id'> & { id?: string }): Omit<Tas
   };
 }
 
+// PostgREST caps any single response at the project's db-max-rows setting
+// (1000 by default), so a plain select silently truncates once the tasks
+// table grows past that — page through with .range() until a page comes
+// back short, rather than depend on that config never mattering.
 export async function fetchActionsFromGoogleSheet(): Promise<ActionItem[]> {
-  const { data, error } = await getClient().from('tasks').select('*');
-  if (error) throw new Error(`Failed to fetch tasks from Supabase: ${error.message}`);
+  const PAGE_SIZE = 1000;
+  const rows: TaskRow[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await getClient()
+      .from('tasks')
+      .select('*')
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(`Failed to fetch tasks from Supabase: ${error.message}`);
+    rows.push(...(data as TaskRow[]));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
   updateLastSyncTime();
-  return (data as TaskRow[]).map(rowToActionItem);
+  return rows.map(rowToActionItem);
 }
 
 export interface PhotoDriveLinks {
