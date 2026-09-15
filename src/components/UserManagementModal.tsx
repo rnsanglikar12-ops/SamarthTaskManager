@@ -17,7 +17,7 @@ import {
   createUser,
   deleteUser,
   changePassword
-} from '../utils/googleSheetsService';
+} from '../utils/dataService';
 import { SAMARTH_ORG_STRUCTURE } from '../data/orgStructure';
 
 interface UserManagementModalProps {

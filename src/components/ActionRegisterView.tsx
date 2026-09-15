@@ -6,7 +6,7 @@ import {
 } from '../types';
 import { isRaisedToOtherDept, getTodayStr } from '../data/sentinelDataLoader';
 import { TASK_DEPARTMENTS, combineAllAssignees } from '../data/orgStructure';
-import { Supervisor } from '../utils/googleSheetsService';
+import { Supervisor } from '../utils/dataService';
 import { 
   Search, 
   Sparkles, 

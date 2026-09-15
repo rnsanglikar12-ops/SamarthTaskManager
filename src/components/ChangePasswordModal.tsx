@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, KeyRound, CheckCircle2, AlertCircle } from 'lucide-react';
 import { hashPassword } from '../utils/auth';
-import { loginUser, changePassword } from '../utils/googleSheetsService';
+import { loginUser, changePassword } from '../utils/dataService';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;

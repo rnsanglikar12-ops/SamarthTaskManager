@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
 import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
-import { uploadPhotoToGoogleSheet } from '../utils/googleSheetsService';
+import { uploadPhotoToGoogleSheet } from '../utils/dataService';
 import { compressImage } from '../utils/imageUtils';
 
 interface ActionDetailModalProps {

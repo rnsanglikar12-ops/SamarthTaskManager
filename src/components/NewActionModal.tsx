@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ActionItem, Priority, Recurrence } from '../types';
 import { TASK_DEPARTMENTS, combineAssigneesForDept, getDefaultAssignee } from '../data/orgStructure';
-import { Supervisor } from '../utils/googleSheetsService';
-import { uploadPhotoToGoogleSheet } from '../utils/googleSheetsService';
+import { Supervisor } from '../utils/dataService';
+import { uploadPhotoToGoogleSheet } from '../utils/dataService';
 import { compressImage } from '../utils/imageUtils';
 import {
   X,
@@ -139,8 +139,11 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     if (!desc.trim() || isSubmitting || isUploadingPhoto) return;
 
     let normalizedRecurrence: Recurrence = 'One-Time';
-    if (recurrenceOption.toLowerCase().includes('daily')) normalizedRecurrence = 'Daily';
-    else if (recurrenceOption.toLowerCase().includes('weekly') || recurrenceOption.toLowerCase().includes('pm')) normalizedRecurrence = 'Weekly';
+    const recurrenceLower = recurrenceOption.toLowerCase();
+    if (recurrenceLower.includes('daily')) normalizedRecurrence = 'Daily';
+    else if (recurrenceLower.includes('monthly')) normalizedRecurrence = 'Monthly';
+    else if (recurrenceLower.includes('quarterly')) normalizedRecurrence = 'Quarterly';
+    else if (recurrenceLower.includes('weekly') || recurrenceLower.includes('pm')) normalizedRecurrence = 'Weekly';
 
     const effectiveBroadcast = isBroadcast;
     const effectiveDept = dept;

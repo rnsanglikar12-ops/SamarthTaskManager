@@ -1,5 +1,5 @@
 export type Priority = 'A' | 'B';
-export type Recurrence = 'One-Time' | 'Daily' | 'Weekly';
+export type Recurrence = 'One-Time' | 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly';
 export type ActionStatus = 'Pending' | 'In process' | 'Completed' | 'Under Verification' | 'Hold';
 
 export interface ActionItem {

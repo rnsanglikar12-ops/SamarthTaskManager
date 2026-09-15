@@ -12,6 +12,7 @@
     "deploy": "npm run build && wrangler pages deploy dist --project-name=samarth-task-manager"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "lucide-react": "^0.546.0",

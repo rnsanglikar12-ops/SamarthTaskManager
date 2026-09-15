@@ -13,7 +13,7 @@ import {
   fetchSupervisors,
   createSupervisor,
   deleteSupervisor
-} from '../utils/googleSheetsService';
+} from '../utils/dataService';
 import { TASK_DEPARTMENTS } from '../data/orgStructure';
 
 interface SupervisorManagementModalProps {

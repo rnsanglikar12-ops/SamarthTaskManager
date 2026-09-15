@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, AlertCircle, LogIn, KeyRound } from 'lucide-react';
 import { AuthUser, Role, hashPassword, setSession } from '../utils/auth';
-import { loginUser, changePassword, isGoogleSheetConnected } from '../utils/googleSheetsService';
+import { loginUser, changePassword, isGoogleSheetConnected } from '../utils/dataService';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: AuthUser) => void;

@@ -11,6 +11,7 @@ import {
   subscribeToTabBroadcast,
   broadcastLocalUpdate
 } from './utils/syncService';
+import { TASK_DEPARTMENTS, getDefaultAssignee } from './data/orgStructure';
 import { Header, NavTab } from './components/Header';
 import { StatsOverview } from './components/StatsOverview';
 // Lazy-loaded: recharts (its only consumer) is a meaningful chunk of the
@@ -25,6 +26,7 @@ import { NewActionModal } from './components/NewActionModal';
 import { UserManagementModal } from './components/UserManagementModal';
 import { SupervisorManagementModal } from './components/SupervisorManagementModal';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { BulkDeleteCompletedModal } from './components/BulkDeleteCompletedModal';
 import { LoginScreen } from './components/LoginScreen';
 import {
   isGoogleSheetConnected,
@@ -33,8 +35,15 @@ import {
   deleteActionInGoogleSheet,
   fetchActionsFromGoogleSheet,
   fetchSupervisors,
+  subscribeToTaskChanges,
+  deleteCompletedTasksBefore,
+  fetchPhotoDriveLinks,
+  savePhotoDriveLinks,
+  PhotoDriveLinks,
   Supervisor
-} from './utils/googleSheetsService';
+} from './utils/dataService';
+import { exportActionsToCsv, ExportRow } from './utils/exportUtils';
+import { archivePhotoToDrive, runWithConcurrency } from './utils/driveArchive';
 import { AuthUser, can, isDeptInScope, getSession, setSession as persistSession, clearSession } from './utils/auth';
 import { CheckCircle2, Calendar, RotateCw, Users, Crown, Lock } from 'lucide-react';
 
@@ -49,6 +58,7 @@ export default function App() {
   const [isSupervisorMgmtModalOpen, setIsSupervisorMgmtModalOpen] = useState<boolean>(false);
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState<boolean>(false);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Department scoping is derived directly from the signed-in session — there
@@ -132,16 +142,30 @@ export default function App() {
 
     (async () => {
       if (!isGoogleSheetConnected()) return;
-      try {
-        const fresh = await fetchActionsFromGoogleSheet();
-        // An empty Sheet is a valid state (e.g. right after a reset) — just
-        // show zero tasks rather than seeding it with anything.
-        if (isMounted) {
-          setActions(fresh || []);
-          saveActionsToStorage(fresh || []);
+      // A single failed attempt isn't necessarily a real outage — retry once
+      // before giving up. On a brand-new device (no localStorage cache) a
+      // silently-swallowed failure here used to leave the whole dashboard
+      // looking permanently empty, with nothing telling the user a retry
+      // might fix it.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const fresh = await fetchActionsFromGoogleSheet();
+          // An empty database is a valid state (e.g. right after a reset) —
+          // just show zero tasks rather than seeding it with anything.
+          if (isMounted) {
+            setActions(fresh || []);
+            saveActionsToStorage(fresh || []);
+          }
+          return;
+        } catch (err) {
+          console.warn(`Backend sync failed (attempt ${attempt + 1}/2):`, err);
+          if (attempt === 0) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
         }
-      } catch (err) {
-        console.warn('Google Sheet sync failed, using local cache:', err);
+      }
+      if (isMounted) {
+        showToast('Could not load the latest data — showing cached data if available. Click Refresh to try again.');
       }
     })();
 
@@ -181,9 +205,34 @@ export default function App() {
     };
     window.addEventListener('storage', handleStorageEvent);
 
+    // Live push of other clients' task changes, replacing manual-Refresh as
+    // the way updates propagate. Same upsert-by-id / filter-by-id merge as
+    // the BroadcastChannel handler above — this tab receiving its own writes
+    // back over Realtime is harmless (idempotent).
+    const unsubscribeRealtime = subscribeToTaskChanges((event) => {
+      if (event.type === 'INSERT' || event.type === 'UPDATE') {
+        const item = event.row as ActionItem;
+        setActions(prev => {
+          const idx = prev.findIndex(a => a.id === item.id);
+          const next = idx >= 0 ? [...prev] : [item, ...prev];
+          if (idx >= 0) next[idx] = item;
+          saveActionsToStorage(next);
+          return next;
+        });
+      } else if (event.type === 'DELETE') {
+        const delId = event.row.id;
+        setActions(prev => {
+          const next = prev.filter(a => a.id !== delId);
+          saveActionsToStorage(next);
+          return next;
+        });
+      }
+    });
+
     return () => {
       isMounted = false;
       unsubscribeBroadcast();
+      unsubscribeRealtime();
       window.removeEventListener('storage', handleStorageEvent);
     };
   }, []);
@@ -299,7 +348,7 @@ export default function App() {
     if (isGoogleSheetConnected()) {
       const ok = await deleteActionInGoogleSheet(id);
       if (!ok) {
-        showToast(`Failed to delete Task #${id} — Google Sheet sync error. Please try again.`);
+        showToast(`Failed to delete Task #${id} — sync error. Please try again.`);
         return false;
       }
     }
@@ -324,7 +373,7 @@ export default function App() {
     if (isGoogleSheetConnected()) {
       const photoLinks = await updateActionInGoogleSheet(updated);
       if (!photoLinks) {
-        showToast(`Failed to save Task #${updated.id} — Google Sheet sync error. Please try again.`);
+        showToast(`Failed to save Task #${updated.id} — sync error. Please try again.`);
         return false;
       }
       // Replace any raw base64 photo with the backend's canonical Drive link
@@ -351,12 +400,66 @@ export default function App() {
       return false;
     }
     if (!isGoogleSheetConnected()) {
-      showToast('Google Sheet backend is not configured. Contact your administrator.');
+      showToast('Database backend is not configured. Contact your administrator.');
       return false;
     }
+
+    // Broadcast: NewActionModal sends one Omit<ActionItem,'id'> tagged
+    // dept: 'All Departments' — that's a placeholder, not a real department,
+    // so a task saved with it as-is would never match any DeptHead's actual
+    // dept-scoped filter (isDeptInScope compares against real dept names)
+    // and would only ever be visible to plant-wide roles. Fan it out into
+    // one real, independently-trackable row per department instead — each
+    // gets its own dept-prefixed ID and default assignee, same as if it had
+    // been created individually for that department.
+    if (newItemData.isBroadcast) {
+      const results = await Promise.all(
+        TASK_DEPARTMENTS.map(deptName =>
+          createActionInGoogleSheet({
+            ...newItemData,
+            dept: deptName,
+            owner: getDefaultAssignee(deptName)
+          })
+        )
+      );
+
+      const newItems: ActionItem[] = [];
+      results.forEach((created, idx) => {
+        if (!created) return;
+        newItems.push({
+          ...newItemData,
+          dept: TASK_DEPARTMENTS[idx],
+          owner: getDefaultAssignee(TASK_DEPARTMENTS[idx]),
+          id: created.id,
+          attachedPhoto: created.attachedPhoto ?? newItemData.attachedPhoto,
+          afterPhoto: created.afterPhoto ?? newItemData.afterPhoto
+        });
+      });
+
+      if (newItems.length === 0) {
+        showToast('Failed to broadcast task — sync error. Please try again.');
+        return false;
+      }
+
+      setActions(prev => {
+        const next = [...newItems, ...prev];
+        saveActionsToStorage(next);
+        return next;
+      });
+      newItems.forEach(item => broadcastLocalUpdate('UPDATE', item));
+
+      const failedCount = TASK_DEPARTMENTS.length - newItems.length;
+      showToast(
+        failedCount === 0
+          ? `Broadcasted to all ${newItems.length} departments & synced`
+          : `Broadcasted to ${newItems.length} of ${TASK_DEPARTMENTS.length} departments — ${failedCount} failed, please retry those separately`
+      );
+      return true;
+    }
+
     const created = await createActionInGoogleSheet(newItemData);
     if (!created) {
-      showToast('Failed to create task — Google Sheet sync error. Please try again.');
+      showToast('Failed to create task — sync error. Please try again.');
       return false;
     }
     // Use the backend's canonical Drive photo links (if any) instead of the
@@ -378,15 +481,92 @@ export default function App() {
     return true;
   }, [session, showToast]);
 
+  // Admin/PlantHead/MD only — exports every currently-loaded task (they're
+  // all plant-wide roles, so `actions` already holds the full dataset) as a
+  // CSV for compliance record-keeping. Photo evidence is archived into
+  // Google Drive first (see driveArchive.ts) so the export is independent
+  // of Supabase staying up — a cache on the task row (attached/after
+  // PhotoDriveLink) means a photo is only ever copied to Drive once, not
+  // re-uploaded on every subsequent export.
+  const handleExportCsv = useCallback(async () => {
+    if (!can(session, 'exportData')) {
+      showToast('Access denied: you do not have permission to export data.');
+      return;
+    }
+
+    const photosToArchive = actions.filter(a => a.attachedPhoto || a.afterPhoto).length;
+    if (photosToArchive > 0) {
+      showToast(`Preparing export — archiving ${photosToArchive} photo${photosToArchive === 1 ? '' : 's'} to Drive, this may take a minute...`);
+    }
+
+    let cached: Record<string, PhotoDriveLinks> = {};
+    try {
+      cached = await fetchPhotoDriveLinks();
+    } catch (err) {
+      console.warn('Failed to fetch cached Drive links, archiving fresh for every photo:', err);
+    }
+
+    const exportRows: ExportRow[] = new Array(actions.length);
+    const newlyCached: { id: string; attachedPhotoDriveLink?: string; afterPhotoDriveLink?: string }[] = [];
+
+    await runWithConcurrency(actions, async (a: ActionItem) => {
+      const idx = actions.indexOf(a);
+      const existing = cached[a.id] || {};
+      let attachedDrive = existing.attachedPhotoDriveLink;
+      let afterDrive = existing.afterPhotoDriveLink;
+
+      if (a.attachedPhoto && !attachedDrive) {
+        attachedDrive = (await archivePhotoToDrive(a.attachedPhoto, `${a.id}_before.jpg`)) || undefined;
+      }
+      if (a.afterPhoto && !afterDrive) {
+        afterDrive = (await archivePhotoToDrive(a.afterPhoto, `${a.id}_after.jpg`)) || undefined;
+      }
+
+      exportRows[idx] = { ...a, attachedPhotoDriveLink: attachedDrive, afterPhotoDriveLink: afterDrive };
+      if (attachedDrive !== existing.attachedPhotoDriveLink || afterDrive !== existing.afterPhotoDriveLink) {
+        newlyCached.push({ id: a.id, attachedPhotoDriveLink: attachedDrive, afterPhotoDriveLink: afterDrive });
+      }
+    }, 4);
+
+    if (newlyCached.length > 0) {
+      try {
+        await savePhotoDriveLinks(newlyCached);
+      } catch (err) {
+        console.warn('Failed to cache newly-archived Drive links:', err);
+      }
+    }
+
+    exportActionsToCsv(exportRows, `samarth_compliance_export_${getTodayStr()}.csv`);
+    showToast(`Exported ${actions.length} tasks to CSV${photosToArchive > 0 ? ' with Drive-archived photo links' : ''}`);
+  }, [session, actions, showToast]);
+
+  // Admin-only bulk cleanup: permanently removes every Completed task
+  // created before the given date. Removes the deleted rows from local
+  // state directly (same criteria the backend used) rather than refetching.
+  const handleDeleteCompletedBefore = useCallback(async (cutoffDate: string): Promise<number> => {
+    if (!can(session, 'bulkDeleteCompleted')) {
+      showToast('Access denied: you do not have permission to bulk-delete tasks.');
+      return 0;
+    }
+    const deletedCount = await deleteCompletedTasksBefore(cutoffDate);
+    setActions(prev => {
+      const next = prev.filter(a => !(a.status === 'Completed' && a.timestamp < cutoffDate));
+      saveActionsToStorage(next);
+      return next;
+    });
+    showToast(`Permanently deleted ${deletedCount} completed task${deletedCount === 1 ? '' : 's'} created before ${cutoffDate}`);
+    return deletedCount;
+  }, [session, showToast]);
+
   // Manual refresh (Header's Refresh button): the only way — besides initial
-  // page load — that the app fetches from the Google Sheet, now that
-  // background polling has been removed. One-directional: sheet -> app only.
-  // Never pushes local state back, even when the sheet comes back empty —
-  // an empty sheet is a valid real state (e.g. right after a reset), not a
+  // page load — that the app fetches from the backend, now that background
+  // polling has been removed. One-directional: backend -> app only. Never
+  // pushes local state back, even when the backend comes back empty — an
+  // empty result is a valid real state (e.g. right after a reset), not a
   // signal to reseed it with whatever happens to be loaded locally.
   const handleRefresh = useCallback(async () => {
     if (!isGoogleSheetConnected()) {
-      showToast('Google Sheet backend is not configured. Contact your administrator.');
+      showToast('Database backend is not configured. Contact your administrator.');
       return;
     }
     try {
@@ -437,6 +617,8 @@ export default function App() {
         onOpenUserManagement={() => setIsUserMgmtModalOpen(true)}
         onOpenSupervisorManagement={() => setIsSupervisorMgmtModalOpen(true)}
         onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
+        onExportCsv={handleExportCsv}
+        onOpenBulkDeleteCompleted={() => setIsBulkDeleteModalOpen(true)}
         currentDept={filters.dept}
         onSelectDept={(dept) => {
           if (!guardDeptSelect(dept)) return;
@@ -656,26 +838,35 @@ export default function App() {
         )}
       </main>
 
-      {/* Action Detail Modal (with Plant Head/MD/Admin date revision & deletion controls and Handshake verification) */}
-      <ActionDetailModal
-        action={selectedAction}
-        onClose={() => setSelectedAction(null)}
-        onSave={handleSaveAction}
-        onDelete={handleDeleteAction}
-        session={session}
-      />
+      {/* Action Detail Modal (with Plant Head/MD/Admin date revision & deletion controls and Handshake verification).
+          Only mounted while an action is actually selected — each of these
+          modals initializes state hooks from props (e.g. action.status)
+          that aren't safe to read before that data exists, so the modal
+          must mount fresh (all hooks together) rather than always being
+          present and toggling an isOpen/action prop on the same instance. */}
+      {selectedAction && (
+        <ActionDetailModal
+          action={selectedAction}
+          onClose={() => setSelectedAction(null)}
+          onSave={handleSaveAction}
+          onDelete={handleDeleteAction}
+          session={session}
+        />
+      )}
 
       {/* New Action Item Modal */}
-      <NewActionModal
-        isOpen={isNewModalOpen}
-        onClose={() => setIsNewModalOpen(false)}
-        onAdd={handleAddAction}
-        lockedDepts={lockedDepts}
-        supervisors={supervisors}
-      />
+      {isNewModalOpen && (
+        <NewActionModal
+          isOpen={isNewModalOpen}
+          onClose={() => setIsNewModalOpen(false)}
+          onAdd={handleAddAction}
+          lockedDepts={lockedDepts}
+          supervisors={supervisors}
+        />
+      )}
 
       {/* User Management Modal (Admin only) */}
-      {can(session, 'manageUsers') && (
+      {can(session, 'manageUsers') && isUserMgmtModalOpen && (
         <UserManagementModal
           isOpen={isUserMgmtModalOpen}
           onClose={() => setIsUserMgmtModalOpen(false)}
@@ -684,7 +875,7 @@ export default function App() {
       )}
 
       {/* Supervisor Management Modal (Admin/PlantHead/MD/DeptHead) */}
-      {can(session, 'manageSupervisors') && (
+      {can(session, 'manageSupervisors') && isSupervisorMgmtModalOpen && (
         <SupervisorManagementModal
           isOpen={isSupervisorMgmtModalOpen}
           onClose={() => setIsSupervisorMgmtModalOpen(false)}
@@ -694,11 +885,23 @@ export default function App() {
       )}
 
       {/* Self-Service Change Password Modal */}
-      <ChangePasswordModal
-        isOpen={isChangePasswordModalOpen}
-        onClose={() => setIsChangePasswordModalOpen(false)}
-        username={session.username}
-      />
+      {isChangePasswordModalOpen && (
+        <ChangePasswordModal
+          isOpen={isChangePasswordModalOpen}
+          onClose={() => setIsChangePasswordModalOpen(false)}
+          username={session.username}
+        />
+      )}
+
+      {/* Bulk Delete Completed Tasks Modal (Admin only) */}
+      {can(session, 'bulkDeleteCompleted') && isBulkDeleteModalOpen && (
+        <BulkDeleteCompletedModal
+          isOpen={isBulkDeleteModalOpen}
+          onClose={() => setIsBulkDeleteModalOpen(false)}
+          actions={actions}
+          onDeleteBefore={handleDeleteCompletedBefore}
+        />
+      )}
     </div>
   );
 }

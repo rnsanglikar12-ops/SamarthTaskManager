@@ -21,14 +21,16 @@ export type Permission =
   | 'reviseDeadline'
   | 'deleteTask'
   | 'manageUsers'
-  | 'manageSupervisors';
+  | 'manageSupervisors'
+  | 'exportData'
+  | 'bulkDeleteCompleted';
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   Viewer: ['view'],
   DeptHead: ['view', 'createTask', 'editOwnDept', 'manageSupervisors'],
-  PlantHead: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageSupervisors'],
-  MD: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageSupervisors'],
-  Admin: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageUsers', 'manageSupervisors'],
+  PlantHead: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageSupervisors', 'exportData'],
+  MD: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageSupervisors', 'exportData'],
+  Admin: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageUsers', 'manageSupervisors', 'exportData', 'bulkDeleteCompleted'],
 };
 
 type ScopedTask = Pick<ActionItem, 'dept' | 'originatorDept'>;

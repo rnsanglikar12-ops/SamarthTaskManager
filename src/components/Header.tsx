@@ -18,9 +18,11 @@ import {
   KeyRound,
   UserCog,
   Menu,
-  X
+  X,
+  Download,
+  Trash2
 } from 'lucide-react';
-import { isGoogleSheetConnected } from '../utils/googleSheetsService';
+import { isGoogleSheetConnected } from '../utils/dataService';
 import { AuthUser, can } from '../utils/auth';
 import { TASK_DEPARTMENTS } from '../data/orgStructure';
 
@@ -38,6 +40,8 @@ interface HeaderProps {
   onOpenUserManagement: () => void;
   onOpenSupervisorManagement: () => void;
   onOpenChangePassword: () => void;
+  onExportCsv: () => void;
+  onOpenBulkDeleteCompleted: () => void;
   currentDept?: string;
   onSelectDept?: (dept: string) => void;
   isRestrictedHodMode?: boolean;
@@ -77,6 +81,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenUserManagement,
   onOpenSupervisorManagement,
   onOpenChangePassword,
+  onExportCsv,
+  onOpenBulkDeleteCompleted,
   currentDept = '',
   onSelectDept,
   isRestrictedHodMode = false,
@@ -156,6 +162,30 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
           <span>Manage Supervisors</span>
+        </button>
+      )}
+      {can(session, 'exportData') && (
+        <button
+          onClick={() => {
+            onExportCsv();
+            closeMenu();
+          }}
+          className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors rounded-lg"
+        >
+          <Download className="w-3.5 h-3.5 text-blue-600" />
+          <span>Export All Data (CSV)</span>
+        </button>
+      )}
+      {can(session, 'bulkDeleteCompleted') && (
+        <button
+          onClick={() => {
+            onOpenBulkDeleteCompleted();
+            closeMenu();
+          }}
+          className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-red-50 text-red-600 transition-colors rounded-lg"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>Delete Completed Tasks...</span>
         </button>
       )}
       <button

@@ -1,0 +1,25 @@
+name = "samarth-task-manager-api"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+[vars]
+# The Google Sheet's spreadsheet ID (the long id in the sheet's URL between
+# /d/ and /edit). Not sensitive on its own — access is controlled by which
+# accounts the sheet is shared with — but kept configurable rather than
+# hardcoded so this deploys cleanly to a new sheet if ever needed.
+SPREADSHEET_ID = "14j_9GEGENrsja8Y_lc3cqa7fJ82t0Dab2rgZr-DrukI"
+
+# Comma-separated list of frontend origins allowed to call this API.
+# localhost:5173 is Vite's default dev port, kept so local dev can talk to
+# the deployed Worker without a separate local backend.
+ALLOWED_ORIGINS = "https://samarth-task-manager.pages.dev,http://localhost:5173"
+
+# The name of the Drive folder new photos are uploaded into. Must already
+# exist and be shared with the service account (Editor) — see
+# PROJECT_CONTEXT.md for the account-setup steps.
+PHOTO_FOLDER_NAME = "Samarth_Action_Photos"
+
+# Secrets (set via `wrangler secret put <NAME>`, never committed):
+#   GOOGLE_SERVICE_ACCOUNT_JSON — the full JSON key file contents for the
+#     service account that has Editor access to the Sheet and the photo
+#     Drive folder.

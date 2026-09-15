@@ -493,3 +493,14 @@ export async function deleteSupervisor(supervisor: Supervisor): Promise<boolean>
   const result = await sendToAppsScript({ action: 'DELETE_SUPERVISOR', ...supervisor });
   return result?.status === 'success';
 }
+
+export type TaskChangeEvent =
+  | { type: 'INSERT' | 'UPDATE'; row: ActionItem }
+  | { type: 'DELETE'; row: { id: string } };
+
+// Apps Script has no push mechanism — the Sheets path stays manual-Refresh-
+// only. This no-op exists purely so src/utils/dataService.ts can re-export
+// the same name from either backend, and App.tsx can call it unconditionally.
+export function subscribeToTaskChanges(_onChange: (event: TaskChangeEvent) => void): () => void {
+  return () => {};
+}

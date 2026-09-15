@@ -1,6 +1,15 @@
 import { ActionItem } from '../types';
 
-export function exportActionsToCsv(actions: ActionItem[], filename = 'samarth_industries_actions.csv'): void {
+// Compliance export rows carry Drive-archived photo links (see
+// src/utils/driveArchive.ts) alongside the plain ActionItem fields — kept
+// as a separate exported type rather than bloating ActionItem, since every
+// other part of the app has no reason to know about Drive archival.
+export interface ExportRow extends ActionItem {
+  attachedPhotoDriveLink?: string;
+  afterPhotoDriveLink?: string;
+}
+
+export function exportActionsToCsv(actions: ExportRow[], filename = 'samarth_industries_actions.csv'): void {
   const headers = [
     'ID',
     'Priority',
@@ -14,7 +23,9 @@ export function exportActionsToCsv(actions: ActionItem[], filename = 'samarth_in
     'Action Notes',
     'Originator Department',
     'Is Kaizen',
-    'Kaizen Benefit'
+    'Kaizen Benefit',
+    'Before Photo (Drive Link)',
+    'After Photo (Drive Link)'
   ];
 
   // Free-text fields (desc, actionNotes, owner, ...) come from real users and
@@ -43,7 +54,9 @@ export function exportActionsToCsv(actions: ActionItem[], filename = 'samarth_in
     escapeCsv(a.actionNotes),
     escapeCsv(a.originatorDept),
     escapeCsv(a.isKaizen ? 'Yes' : 'No'),
-    escapeCsv(a.kaizenBenefit || '')
+    escapeCsv(a.kaizenBenefit || ''),
+    escapeCsv(a.attachedPhotoDriveLink || ''),
+    escapeCsv(a.afterPhotoDriveLink || '')
   ].join(','));
 
   const csvContent = [headers.join(','), ...rows].join('\r\n');
