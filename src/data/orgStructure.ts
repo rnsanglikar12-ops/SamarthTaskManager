@@ -17,91 +17,91 @@ export const SAMARTH_ORG_STRUCTURE: DepartmentStructure[] = [
     srNo: 3,
     deptName: 'PDC',
     deptHead: 'Shrirang C.',
-    supervisors: ['Kamble K.', 'Pande J.', 'Jagtap', 'Harish P', 'Kisan G']
+    supervisors: ['Khandu K', 'Jayprakash P', 'Kisan G', 'Rakshe R', 'Jagtap N', 'Harish P']
   },
   {
     srNo: 4,
     deptName: 'Die Maint',
     deptHead: 'Shrirang C.',
-    supervisors: ['Subrata G', 'Rakshe R.']
+    supervisors: ['Subrata G']
   },
   {
     srNo: 5,
     deptName: 'SPM',
     deptHead: 'Shrirang C.',
-    supervisors: ['Madan G', 'Rakesh']
+    supervisors: []
   },
   {
     srNo: 6,
     deptName: 'Fettling',
     deptHead: 'Shrirang C.',
-    supervisors: ['Santosh P', 'Dey S', 'Ram Y']
+    supervisors: ['Santosh P']
   },
   {
     srNo: 7,
     deptName: 'Machine shop-01',
     deptHead: 'Ibrahim S',
-    supervisors: ['Hanumant H', 'Situn', 'Dilip R']
+    supervisors: []
   },
   {
     srNo: 8,
     deptName: 'Machine shop-02',
     deptHead: 'Sunil G',
-    supervisors: ['Kiran', 'Dilip P', 'Shivashankar']
+    supervisors: []
   },
   {
     srNo: 9,
     deptName: 'PPC',
-    deptHead: 'Ratan S',
-    supervisors: ['Vaibhav W.', 'Ashok K', 'Purushottam P', 'Masud K']
+    deptHead: 'Shaikh R',
+    supervisors: ['Ashok K', 'Vaibhav W.']
   },
   {
     srNo: 10,
     deptName: 'Store',
     deptHead: 'Dipak G',
-    supervisors: ['Alok']
+    supervisors: []
   },
   {
     srNo: 11,
     deptName: 'MC Maint',
     deptHead: 'Mohite R',
-    supervisors: ['Rupesh D']
+    supervisors: []
   },
   {
     srNo: 12,
     deptName: 'Quality',
     deptHead: 'Shailesh T',
-    supervisors: ['Vyanket', 'Dipak D']
+    supervisors: []
   },
   {
     srNo: 13,
     deptName: 'NPD',
-    deptHead: 'Ravindra N',
-    supervisors: ['Nayan P']
+    deptHead: 'Nawale R',
+    supervisors: []
   },
   {
     srNo: 14,
     deptName: 'Tool Room',
     deptHead: 'Ravindra N',
-    supervisors: ['Yogesh J', 'Pratyay']
+    supervisors: ['Yogesh J']
   },
   {
     srNo: 15,
     deptName: 'HR',
     deptHead: 'Poonam S',
-    supervisors: ['Trivenee']
+    supervisors: []
   },
   {
     srNo: 16,
     deptName: 'Account',
     deptHead: 'Sushant D',
-    supervisors: ['Siddharth']
+    supervisors: []
   },
   {
     srNo: 17,
     deptName: 'Purchase',
     deptHead: 'Pankaj B',
-    supervisors: ['Govind']
+    supervisors: []
   }
 ];
 

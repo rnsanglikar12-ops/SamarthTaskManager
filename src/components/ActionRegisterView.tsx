@@ -419,9 +419,9 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             <thead>
               <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 select-none">
                 {/* ID Column */}
-                <th 
+                <th
                   onClick={() => handleSort('id')}
-                  className="py-3 px-3.5 w-16 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  className="py-3 px-3.5 w-24 cursor-pointer hover:bg-slate-100/70 transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>ID</span>
