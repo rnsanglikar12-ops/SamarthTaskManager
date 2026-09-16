@@ -82,7 +82,7 @@ export const SAMARTH_ORG_STRUCTURE: DepartmentStructure[] = [
   {
     srNo: 14,
     deptName: 'Tool Room',
-    deptHead: 'Ravindra N',
+    deptHead: 'Nawale R',
     supervisors: ['Yogesh J']
   },
   {
@@ -94,7 +94,7 @@ export const SAMARTH_ORG_STRUCTURE: DepartmentStructure[] = [
   {
     srNo: 16,
     deptName: 'Account',
-    deptHead: 'Sushant D',
+    deptHead: 'Shinde S',
     supervisors: []
   },
   {
