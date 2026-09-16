@@ -103,7 +103,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
         const matchesOwner = item.owner.toLowerCase().includes(query);
         const matchesDept = item.dept.toLowerCase().includes(query);
         const matchesNotes = (item.actionNotes?.toLowerCase().includes(query)) || (item.machineNote?.toLowerCase().includes(query)) || false;
-        const matchesId = item.id.toString() === query || `#${item.id}` === query;
+        const matchesId = item.id.toLowerCase().includes(query) || `#${item.id}`.toLowerCase().includes(query);
         if (!matchesDesc && !matchesOwner && !matchesDept && !matchesNotes && !matchesId) {
           return false;
         }
