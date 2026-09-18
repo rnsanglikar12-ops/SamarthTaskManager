@@ -24,6 +24,20 @@ function toEmbeddableDriveUrl(url?: string): string | undefined {
   return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
 }
 
+// With no dedicated before/after-detail fields, operators write both into
+// the single Notes field as "Before - ... / After - ...". Split that back
+// apart so each half prints under its own photo instead of all landing
+// under "After Details"; free-form notes with no such markers just fall
+// back to showing the whole thing as the after-state description.
+function splitBeforeAfterNotes(notes?: string): { before?: string; after?: string } {
+  if (!notes?.trim()) return {};
+  const match = notes.match(/before\s*[-:]?\s*([\s\S]*?)\s*after\s*[-:]?\s*([\s\S]*)/i);
+  if (match) {
+    return { before: match[1].trim() || undefined, after: match[2].trim() || undefined };
+  }
+  return { after: notes.trim() };
+}
+
 export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
   isOpen,
   onClose,
@@ -33,6 +47,9 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
 
   const printableBeforePhoto = toEmbeddableDriveUrl(action.attachedPhoto);
   const printableAfterPhoto = toEmbeddableDriveUrl(action.afterPhoto);
+  const { before: parsedBefore, after: parsedAfter } = splitBeforeAfterNotes(action.actionNotes);
+  const beforeDetails = parsedBefore || action.desc.replace(/⭐\s*\[DSI Kaizen\]/i, '').trim() || 'Not recorded.';
+  const afterDetails = parsedAfter || 'Not recorded.';
 
   const handlePrint = () => {
     window.print();
@@ -145,7 +162,7 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">Initial State</span>
                 </div>
-                <div className="w-full h-44 bg-slate-100 rounded border border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
+                <div className="w-full h-40 bg-slate-100 rounded border border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
                   {printableBeforePhoto ? (
                     <img
                       src={printableBeforePhoto}
@@ -159,6 +176,10 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
                     </div>
                   )}
                 </div>
+                <div className="text-[11px] leading-relaxed">
+                  <span className="font-bold text-slate-700 uppercase tracking-wide block">Before Details</span>
+                  <p className="text-slate-600">{beforeDetails}</p>
+                </div>
               </div>
 
               {/* After Condition */}
@@ -169,7 +190,7 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
                   </span>
                   <span className="text-[10px] font-mono text-emerald-600 font-bold">Standardized</span>
                 </div>
-                <div className="w-full h-44 bg-emerald-50/40 rounded border border-dashed border-emerald-300 flex items-center justify-center overflow-hidden">
+                <div className="w-full h-40 bg-emerald-50/40 rounded border border-dashed border-emerald-300 flex items-center justify-center overflow-hidden">
                   {printableAfterPhoto ? (
                     <img
                       src={printableAfterPhoto}
@@ -184,28 +205,31 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
                     </div>
                   )}
                 </div>
+                <div className="text-[11px] leading-relaxed">
+                  <span className="font-bold text-emerald-800 uppercase tracking-wide block">After Details</span>
+                  <p className="text-slate-600">{afterDetails}</p>
+                </div>
               </div>
             </div>
 
-            {/* Kaizen Benefit & Standardization Work Instruction */}
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-lg space-y-1">
-                <span className="font-bold text-amber-900 block uppercase tracking-wide">
-                  Tangible Benefits (QCDSM)
-                </span>
-                <p className="text-slate-700 leading-relaxed">
-                  {action.kaizenBenefit || 'Defect containment, safety improvement, ergonomic ease, cycle time adherence.'}
-                </p>
-              </div>
+            {/* Tangible Benefits — common section covering both before/after */}
+            <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-lg space-y-1 text-xs">
+              <span className="font-bold text-amber-900 block uppercase tracking-wide">
+                Tangible Benefits (QCDSM)
+              </span>
+              <p className="text-slate-700 leading-relaxed">
+                {action.kaizenBenefit || 'Defect containment, safety improvement, ergonomic ease, cycle time adherence.'}
+              </p>
+            </div>
 
-              <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-lg space-y-1">
-                <span className="font-bold text-blue-900 block uppercase tracking-wide">
-                  Standard Work Instruction
-                </span>
-                <p className="text-slate-700 leading-relaxed">
-                  Procedure documented in SOP / visual control card. Added to daily 5S & autonomous maintenance checklist.
-                </p>
-              </div>
+            {/* Standardization Work Instruction */}
+            <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-lg space-y-1 text-xs">
+              <span className="font-bold text-blue-900 block uppercase tracking-wide">
+                Standard Work Instruction
+              </span>
+              <p className="text-slate-700 leading-relaxed">
+                Procedure documented in SOP / visual control card. Added to daily 5S & autonomous maintenance checklist.
+              </p>
             </div>
 
             {/* Signatures & Executive Authorization */}
@@ -221,7 +245,7 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
 
               <div>
                 <div className="h-10 border-b border-slate-400 flex items-end justify-center pb-1 font-semibold text-slate-800">
-                  Awari B.
+                  Awari B
                 </div>
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mt-1">
                   Plant Head (Verified)

@@ -4,37 +4,37 @@ export const SAMARTH_ORG_STRUCTURE: DepartmentStructure[] = [
   {
     srNo: 1,
     deptName: 'MD',
-    deptHead: 'Sangram J.',
+    deptHead: 'Sangram J',
     supervisors: []
   },
   {
     srNo: 2,
     deptName: 'Plant Head',
-    deptHead: 'Awari B.',
+    deptHead: 'Awari B',
     supervisors: []
   },
   {
     srNo: 3,
     deptName: 'PDC',
-    deptHead: 'Shrirang C.',
+    deptHead: 'Shrirang C',
     supervisors: ['Khandu K', 'Jayprakash P', 'Kisan G', 'Rakshe R', 'Jagtap N', 'Harish P']
   },
   {
     srNo: 4,
     deptName: 'Die Maint',
-    deptHead: 'Shrirang C.',
+    deptHead: 'Shrirang C',
     supervisors: ['Subrata G']
   },
   {
     srNo: 5,
     deptName: 'SPM',
-    deptHead: 'Shrirang C.',
+    deptHead: 'Shrirang C',
     supervisors: []
   },
   {
     srNo: 6,
     deptName: 'Fettling',
-    deptHead: 'Shrirang C.',
+    deptHead: 'Shrirang C',
     supervisors: ['Santosh P']
   },
   {
@@ -53,7 +53,7 @@ export const SAMARTH_ORG_STRUCTURE: DepartmentStructure[] = [
     srNo: 9,
     deptName: 'PPC',
     deptHead: 'Shaikh R',
-    supervisors: ['Ashok K', 'Vaibhav W.']
+    supervisors: ['Ashok K', 'Vaibhav W']
   },
   {
     srNo: 10,
