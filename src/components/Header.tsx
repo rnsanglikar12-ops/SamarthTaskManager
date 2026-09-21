@@ -213,6 +213,10 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200/90 shadow-sm select-none">
+      {/* iOS standalone PWA: the status bar is translucent and the page draws
+          underneath it (viewport-fit=cover), so reserve the notch/status-bar
+          height here. Zero-height in a normal browser tab. */}
+      <div className="bg-[#1d64ec]" style={{ height: 'env(safe-area-inset-top)' }} />
       {/* Top Bar */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100">
 
@@ -426,7 +430,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="absolute inset-0 bg-slate-900/50 animate-in fade-in duration-150"
             onClick={() => setIsMobileMenuOpen(false)}
           />
-          <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-sm bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+          <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-sm bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
               <span className="font-bold text-slate-900">Menu</span>
               <button
