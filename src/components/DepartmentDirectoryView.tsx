@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { SAMARTH_ORG_STRUCTURE, MENTOR_NAME } from '../data/orgStructure';
-import { getTodayStr } from '../data/sentinelDataLoader';
+import { getTodayStr, isoToLocalDateStr } from '../data/sentinelDataLoader';
 import { ActionItem } from '../types';
 import {
   Building2,
@@ -23,6 +23,7 @@ interface DepartmentDirectoryViewProps {
   actions: ActionItem[];
   onSelectDepartment: (deptName: string) => void;
   lockedDepts?: string[] | null;
+  supervisors?: { name: string; dept: string }[];
 }
 
 type ViewTab = 'graphical' | 'split' | 'roster';
@@ -30,7 +31,8 @@ type ViewTab = 'graphical' | 'split' | 'roster';
 export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = ({
   actions,
   onSelectDepartment,
-  lockedDepts = null
+  lockedDepts = null,
+  supervisors = []
 }) => {
   const [activeViewTab, setActiveViewTab] = useState<ViewTab>('graphical');
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +68,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
         stats[d].priorityA += 1;
       }
 
-      if (a.status !== 'Completed' && a.deadline <= todayStr) {
+      if (a.status !== 'Completed' && a.deadline < todayStr) {
         stats[d].overdue += 1;
       }
     });
@@ -76,8 +78,16 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
 
   // Operational departments (excluding MD since MD doesn't attract tasks)
   const departmentsList = useMemo(() => {
-    return SAMARTH_ORG_STRUCTURE.filter(d => d.deptName !== 'MD');
-  }, []);
+    // Static org structure plus supervisors added at runtime through
+    // Manage Supervisors, so the roster never lags behind the Assignee list.
+    return SAMARTH_ORG_STRUCTURE.filter(d => d.deptName !== 'MD').map(d => ({
+      ...d,
+      supervisors: Array.from(new Set([
+        ...d.supervisors,
+        ...supervisors.filter(s => s.dept === d.deptName).map(s => s.name)
+      ]))
+    }));
+  }, [supervisors]);
 
   // Filtered departments based on search
   const filteredDepartments = useMemo(() => {
@@ -98,24 +108,48 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
     return actions.filter(a => (a.dept || 'General').toLowerCase() === selectedVelocityDept.toLowerCase());
   }, [actions, selectedVelocityDept]);
 
-  // Velocity calculations matching Screenshot 3
-  const totalVelocityTasks = velocityActions.length;
-  const closedVelocityTasks = velocityActions.filter(a => a.status === 'Completed').length;
-  const closureVelocityPercent = totalVelocityTasks > 0 
-    ? ((closedVelocityTasks / totalVelocityTasks) * 100).toFixed(1) 
+  // Real trailing-4-week velocity: four consecutive 7-day windows ending today.
+  // "Generated" = tasks created in the window (createdAt timestamp); "Closed" =
+  // Completed tasks whose last update fell in the window (closedAt — there is
+  // no dedicated completion column, so last-update-while-Completed is the
+  // closest available signal).
+  const weeklyVelocity = useMemo(() => {
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const dayStr = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const weeks = [3, 2, 1, 0].map(back => {
+      const end = new Date(today);
+      end.setDate(end.getDate() - back * 7);
+      const start = new Date(end);
+      start.setDate(start.getDate() - 6);
+      return {
+        week: `${back === 0 ? 'This Wk' : `W-${back}`} (${fmt(start)} - ${fmt(end)})`,
+        start: dayStr(start),
+        end: dayStr(end),
+        generated: 0,
+        closed: 0
+      };
+    });
+    const bucket = (dateStr: string) => weeks.find(w => dateStr >= w.start && dateStr <= w.end);
+    velocityActions.forEach(a => {
+      const created = bucket(isoToLocalDateStr(a.timestamp));
+      if (created) created.generated += 1;
+      if (a.status === 'Completed') {
+        const closed = bucket(isoToLocalDateStr(a.closedAt));
+        if (closed) closed.closed += 1;
+      }
+    });
+    return weeks;
+  }, [velocityActions, todayStr]);
+
+  const totalVelocityTasks = weeklyVelocity.reduce((n, w) => n + w.generated, 0);
+  const closedVelocityTasks = weeklyVelocity.reduce((n, w) => n + w.closed, 0);
+  const closureVelocityPercent = totalVelocityTasks > 0
+    ? ((closedVelocityTasks / totalVelocityTasks) * 100).toFixed(1)
     : '0.0';
   const netVelocityBalance = closedVelocityTasks - totalVelocityTasks;
-
-  // 4-Week Velocity data (Aug 10-16, Aug 17-23, Aug 24-30, Aug 31-Sep 11)
-  const weeklyVelocity = useMemo(() => {
-    // Proportional distribution across the 4 weeks
-    return [
-      { week: 'W-3 (Aug 10-16)', generated: Math.round(totalVelocityTasks * 0.22), closed: Math.round(closedVelocityTasks * 0.24) },
-      { week: 'W-2 (Aug 17-23)', generated: Math.round(totalVelocityTasks * 0.26), closed: Math.round(closedVelocityTasks * 0.27) },
-      { week: 'W-1 (Aug 24-30)', generated: Math.round(totalVelocityTasks * 0.28), closed: Math.round(closedVelocityTasks * 0.26) },
-      { week: 'Current Wk (Aug 31-)', generated: Math.round(totalVelocityTasks * 0.24), closed: Math.round(closedVelocityTasks * 0.23) },
-    ];
-  }, [totalVelocityTasks, closedVelocityTasks]);
 
   // Leadership compliance ranking benchmarked against 80% target
   const complianceRanking = useMemo(() => {
@@ -130,7 +164,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
     }).sort((a, b) => b.rate - a.rate);
   }, [departmentsList, deptStats]);
 
-  const maxWeeklyVal = Math.max(...weeklyVelocity.flatMap(w => [w.generated, w.closed]), 100);
+  const maxWeeklyVal = Math.max(...weeklyVelocity.flatMap(w => [w.generated, w.closed]), 1);
 
   return (
     <div className="space-y-5">
@@ -146,7 +180,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                 Department Leadership Scorecards & Graphical Roster
               </h2>
               <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-blue-200">
-                17 Departments Active
+                {departmentsList.length} Departments Active
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -303,7 +337,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                 {netVelocityBalance}
               </div>
               <div className="text-[11px] text-amber-700 mt-0.5 font-medium">
-                Backlog increasing
+                {netVelocityBalance < 0 ? 'Backlog increasing' : netVelocityBalance > 0 ? 'Backlog shrinking' : 'Backlog steady'}
               </div>
             </div>
           </div>
@@ -312,8 +346,8 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
           <div className="pt-2">
             <div className="h-60 flex items-end justify-between gap-4 sm:gap-8 px-4 sm:px-8 border-b border-slate-200 pb-2">
               {weeklyVelocity.map((w, idx) => {
-                const closedHeight = Math.max(Math.round((w.closed / maxWeeklyVal) * 190), 12);
-                const genHeight = Math.max(Math.round((w.generated / maxWeeklyVal) * 190), 16);
+                const closedHeight = w.closed > 0 ? Math.max(Math.round((w.closed / maxWeeklyVal) * 190), 12) : 2;
+                const genHeight = w.generated > 0 ? Math.max(Math.round((w.generated / maxWeeklyVal) * 190), 16) : 2;
 
                 return (
                   <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
@@ -522,7 +556,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
         <div className="space-y-4 pt-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">
-              Complete 17-Department Organizational Cards & Supervisory Roster
+              Complete {departmentsList.length}-Department Organizational Cards & Supervisory Roster
             </h3>
             <span className="text-xs text-slate-500">
               Mentor: <strong>{MENTOR_NAME}</strong>

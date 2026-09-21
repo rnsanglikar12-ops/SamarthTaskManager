@@ -1,4 +1,5 @@
 import { ActionItem } from '../types';
+import { isoToLocalDateStr } from '../data/sentinelDataLoader';
 
 // Compliance export rows carry Drive-archived photo links (see
 // src/utils/driveArchive.ts) alongside the plain ActionItem fields — kept
@@ -17,6 +18,7 @@ export function exportActionsToCsv(actions: ExportRow[], filename = 'samarth_ind
     'Department',
     'Description',
     'Owner / Assignee',
+    'Created Date',
     'Deadline',
     'Evidence Requirement',
     'Status',
@@ -48,6 +50,7 @@ export function exportActionsToCsv(actions: ExportRow[], filename = 'samarth_ind
     escapeCsv(a.dept),
     escapeCsv(a.desc),
     escapeCsv(a.owner),
+    escapeCsv(isoToLocalDateStr(a.timestamp)),
     escapeCsv(a.deadline),
     escapeCsv(a.evidence),
     escapeCsv(a.status),

@@ -120,6 +120,7 @@ interface TaskRow {
   is_mom: boolean;
   is_cft: boolean;
   machine_note: string | null;
+  updated_at?: string;
 }
 
 function rowToActionItem(row: TaskRow): ActionItem {
@@ -144,7 +145,8 @@ function rowToActionItem(row: TaskRow): ActionItem {
     category: row.category || undefined,
     isMOM: row.is_mom,
     isCFT: row.is_cft,
-    machineNote: row.machine_note || undefined
+    machineNote: row.machine_note || undefined,
+    closedAt: row.status === 'Completed' ? row.updated_at : undefined
   };
 }
 

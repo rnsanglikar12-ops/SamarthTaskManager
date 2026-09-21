@@ -16,6 +16,15 @@ export function getTodayStr(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// Converts a stored ISO timestamp (UTC) to the plant's local 'YYYY-MM-DD'
+// calendar date, so it lines up with getTodayStr() and the text deadlines.
+export function isoToLocalDateStr(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Helper to check if a task was raised to another department (Inter-departmental CFT Handshake)
 export function isRaisedToOtherDept(originatorDept?: string, targetDept?: string): boolean {
   if (!originatorDept || !targetDept) return false;

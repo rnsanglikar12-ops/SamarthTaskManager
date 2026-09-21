@@ -481,8 +481,9 @@ export default function App() {
     return true;
   }, [session, showToast]);
 
-  // Admin/PlantHead/MD only — exports every currently-loaded task (they're
-  // all plant-wide roles, so `actions` already holds the full dataset) as a
+  // Every role can export, scoped to what they can see: plant-wide roles get
+  // everything, department-scoped users get their own departments' tasks plus
+  // CFT tasks raised to/from them (visibleActions, via isDeptInScope) — as a
   // CSV for compliance record-keeping. Photo evidence is archived into
   // Google Drive first (see driveArchive.ts) so the export is independent
   // of Supabase staying up — a cache on the task row (attached/after
@@ -494,7 +495,7 @@ export default function App() {
       return;
     }
 
-    const photosToArchive = actions.filter(a => a.attachedPhoto || a.afterPhoto).length;
+    const photosToArchive = visibleActions.filter(a => a.attachedPhoto || a.afterPhoto).length;
     if (photosToArchive > 0) {
       showToast(`Preparing export — archiving ${photosToArchive} photo${photosToArchive === 1 ? '' : 's'} to Drive, this may take a minute...`);
     }
@@ -506,11 +507,11 @@ export default function App() {
       console.warn('Failed to fetch cached Drive links, archiving fresh for every photo:', err);
     }
 
-    const exportRows: ExportRow[] = new Array(actions.length);
+    const exportRows: ExportRow[] = new Array(visibleActions.length);
     const newlyCached: { id: string; attachedPhotoDriveLink?: string; afterPhotoDriveLink?: string }[] = [];
 
-    await runWithConcurrency(actions, async (a: ActionItem) => {
-      const idx = actions.indexOf(a);
+    await runWithConcurrency(visibleActions, async (a: ActionItem) => {
+      const idx = visibleActions.indexOf(a);
       const existing = cached[a.id] || {};
       let attachedDrive = existing.attachedPhotoDriveLink;
       let afterDrive = existing.afterPhotoDriveLink;
@@ -537,8 +538,8 @@ export default function App() {
     }
 
     exportActionsToCsv(exportRows, `samarth_compliance_export_${getTodayStr()}.csv`);
-    showToast(`Exported ${actions.length} tasks to CSV${photosToArchive > 0 ? ' with Drive-archived photo links' : ''}`);
-  }, [session, actions, showToast]);
+    showToast(`Exported ${visibleActions.length} tasks to CSV${photosToArchive > 0 ? ' with Drive-archived photo links' : ''}`);
+  }, [session, visibleActions, showToast]);
 
   // Admin-only bulk cleanup: permanently removes every Completed task
   // created before the given date. Removes the deleted rows from local
@@ -829,6 +830,7 @@ export default function App() {
           <DepartmentDirectoryView
             actions={visibleActions}
             lockedDepts={lockedDepts}
+            supervisors={supervisors}
             onSelectDepartment={(dept) => {
               if (!guardDeptSelect(dept)) return;
               setGuardedFilters(prev => ({ ...prev, dept }));

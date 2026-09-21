@@ -26,8 +26,8 @@ export type Permission =
   | 'bulkDeleteCompleted';
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  Viewer: ['view'],
-  DeptHead: ['view', 'createTask', 'editOwnDept', 'manageSupervisors'],
+  Viewer: ['view', 'exportData'],
+  DeptHead: ['view', 'createTask', 'editOwnDept', 'manageSupervisors', 'exportData'],
   PlantHead: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageSupervisors', 'exportData'],
   MD: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageSupervisors', 'exportData'],
   Admin: ['view', 'createTask', 'editOwnDept', 'editAnyDept', 'reviseDeadline', 'deleteTask', 'manageUsers', 'manageSupervisors', 'exportData', 'bulkDeleteCompleted'],

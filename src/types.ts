@@ -17,6 +17,9 @@ export interface ActionItem {
   actionNotes: string;
   attachedPhoto?: string;
   timestamp: string;
+  // ISO time of the last update, only set while status is Completed — the
+  // closest thing to a close date (no dedicated column exists).
+  closedAt?: string;
   originatorDept: string;
   afterPhoto?: string;
   isKaizen?: boolean;

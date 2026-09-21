@@ -173,7 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
           className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-slate-50 transition-colors rounded-lg"
         >
           <Download className="w-3.5 h-3.5 text-blue-600" />
-          <span>Export All Data (CSV)</span>
+          <span>{session?.departments ? 'Export My Depts Data (CSV)' : 'Export All Data (CSV)'}</span>
         </button>
       )}
       {can(session, 'bulkDeleteCompleted') && (

@@ -4,7 +4,7 @@ import {
   FilterState, 
   ActionStatus 
 } from '../types';
-import { isRaisedToOtherDept, getTodayStr } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, getTodayStr, isoToLocalDateStr } from '../data/sentinelDataLoader';
 import { TASK_DEPARTMENTS, combineAllAssignees } from '../data/orgStructure';
 import { Supervisor } from '../utils/dataService';
 import { 
@@ -43,7 +43,7 @@ interface ActionRegisterViewProps {
   supervisors?: Supervisor[];
 }
 
-type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'closed';
+type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'pending' | 'closed';
 
 export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   actions,
@@ -94,6 +94,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
       if (activeQuickFilter === 'broadcast' && !item.isBroadcast) return false;
       if (activeQuickFilter === 'recurring' && item.recurrence === 'One-Time') return false;
       if (activeQuickFilter === 'verification' && item.status !== 'Under Verification') return false;
+      if (activeQuickFilter === 'pending' && item.status !== 'Pending') return false;
       if (activeQuickFilter === 'closed' && item.status !== 'Completed') return false;
 
       // Search
@@ -361,6 +362,22 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             <span>Recurring PM (2)</span>
           </button>
 
+          {/* Pending */}
+          <button
+            onClick={() => {
+              setActiveQuickFilter(activeQuickFilter === 'pending' ? 'all' : 'pending');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
+              activeQuickFilter === 'pending'
+                ? 'bg-amber-600 text-white shadow-2xs'
+                : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <Clock className="w-3 h-3 text-amber-500" />
+            <span>Pending</span>
+          </button>
+
           {/* Verification */}
           <button
             onClick={() => {
@@ -461,6 +478,17 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                   </div>
                 </th>
 
+                {/* Create Date Column */}
+                <th
+                  onClick={() => handleSort('timestamp')}
+                  className="py-3 px-3.5 w-32 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>CREATE DATE</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
+
                 {/* Due Date Column */}
                 <th 
                   onClick={() => handleSort('deadline')}
@@ -487,7 +515,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {paginatedActions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 text-sm">
+                  <td colSpan={9} className="py-12 text-center text-slate-400 text-sm">
                     No matching action items found.
                   </td>
                 </tr>
@@ -558,6 +586,11 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                       {/* ASSIGNEE */}
                       <td className="py-3.5 px-3.5 text-xs font-medium text-slate-700 whitespace-nowrap">
                         {item.owner}
+                      </td>
+
+                      {/* CREATE DATE */}
+                      <td className="py-3.5 px-3.5 whitespace-nowrap font-mono text-xs text-slate-600">
+                        {isoToLocalDateStr(item.timestamp) || '—'}
                       </td>
 
                       {/* DUE DATE */}
