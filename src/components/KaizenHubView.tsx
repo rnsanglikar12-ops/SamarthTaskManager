@@ -65,7 +65,7 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
   // Extract Kaizen & DSI initiatives from actions
   const kaizenActions = useMemo(() => actions.filter(isKaizenAction), [actions]);
 
-  // Champions list (the 17 HODs)
+  // Champions list (the distinct department heads)
   const champions = useMemo(() => {
     const hods = SAMARTH_ORG_STRUCTURE.map(d => d.deptHead);
     return Array.from(new Set(hods)).filter(Boolean).sort();
@@ -215,13 +215,13 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
             </select>
           )}
 
-          {/* Champions Dropdown (17 Champions) */}
+          {/* Champions Dropdown */}
           <select
             value={selectedChampion}
             onChange={(e) => setSelectedChampion(e.target.value)}
             className="py-2 px-3 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:border-emerald-500 shadow-2xs"
           >
-            <option value="">All Champions (17)</option>
+            <option value="">All Champions ({champions.length})</option>
             {champions.map(c => (
               <option key={c} value={c}>{c}</option>
             ))}

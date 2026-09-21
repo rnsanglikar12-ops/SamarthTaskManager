@@ -13,6 +13,7 @@ import {
   Cell
 } from 'recharts';
 import { ActionItem } from '../types';
+import { TASK_DEPARTMENTS } from '../data/orgStructure';
 import { 
   TrendingUp, 
   CheckCircle2, 
@@ -139,7 +140,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </h2>
             </div>
             <p className="text-xs text-[#94a3b8] mt-1 max-w-2xl">
-              Real-time synchronization across 17 plant departments at Samarth Industries. Monitoring CAPA compliance, IATF 16949 requirements, and Daily Work Management execution.
+              Real-time synchronization across {TASK_DEPARTMENTS.length} plant departments at Samarth Industries. Monitoring CAPA compliance, IATF 16949 requirements, and Daily Work Management execution.
             </p>
           </div>
 
@@ -166,7 +167,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
           <div>
             <span className="text-[#94a3b8] block">Active Plant HODs</span>
-            <span className="text-lg font-bold text-[#38bdf8] font-mono">17 Departments</span>
+            <span className="text-lg font-bold text-[#38bdf8] font-mono">{TASK_DEPARTMENTS.length} Departments</span>
           </div>
           <div>
             <span className="text-[#94a3b8] block">Standard Recurrence</span>
