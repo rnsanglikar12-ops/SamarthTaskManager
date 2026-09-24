@@ -25,14 +25,18 @@ interface NewActionModalProps {
   onAdd: (newItem: Omit<ActionItem, 'id'>) => Promise<boolean>;
   lockedDepts?: string[] | null;
   supervisors?: Supervisor[];
+  defaultIsMOM?: boolean;
 }
+
+const MOM_TRIGGER = '📋 Saturday MOM Operational Action';
 
 export const NewActionModal: React.FC<NewActionModalProps> = ({
   isOpen,
   onClose,
   onAdd,
   lockedDepts = null,
-  supervisors = []
+  supervisors = [],
+  defaultIsMOM = false
 }) => {
   if (!isOpen) return null;
 
@@ -45,7 +49,9 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [desc, setDesc] = useState('');
-  const [originTrigger, setOriginTrigger] = useState('💡 General Kaizen (Continuous Improvement)');
+  const [originTrigger, setOriginTrigger] = useState(
+    defaultIsMOM ? MOM_TRIGGER : '💡 General Kaizen (Continuous Improvement)'
+  );
   const [isBroadcast, setIsBroadcast] = useState(false);
   const [priority, setPriority] = useState<Priority>('B');
   const [recurrenceOption, setRecurrenceOption] = useState<string>('One-Time Action');
@@ -168,6 +174,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       // descriptive context, unrelated to the DSI flag.
       isKaizen: false,
       isBroadcast,
+      isMOM: originTrigger === MOM_TRIGGER,
       machineNote: machineEqNo || undefined
     });
     setIsSubmitting(false);
@@ -251,7 +258,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                 <option value="🚨 Safety Directive / Hazard Containment">🚨 Safety Directive / Hazard Containment</option>
                 <option value="🔍 Internal / Customer Audit Finding">🔍 Internal / Customer Audit Finding</option>
                 <option value="⚡ Line Breakdown / Equipment Abnormality">⚡ Line Breakdown / Equipment Abnormality</option>
-                <option value="📋 Saturday MOM Operational Action">📋 Saturday MOM Operational Action</option>
+                <option value={MOM_TRIGGER}>{MOM_TRIGGER}</option>
                 <option value="🤝 CFT Handshake Resolution">🤝 CFT Handshake Resolution</option>
                 <option value="📊 DWM Daily Work Management">📊 DWM Daily Work Management</option>
               </select>

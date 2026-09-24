@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { ActionItem, FilterState, SentinelStats, ActionStatus } from './types';
 import {
   getInitialActions,
@@ -23,6 +23,7 @@ import { DepartmentDirectoryView } from './components/DepartmentDirectoryView';
 import { KaizenHubView } from './components/KaizenHubView';
 import { ActionDetailModal } from './components/ActionDetailModal';
 import { NewActionModal } from './components/NewActionModal';
+import { NewTasksModal } from './components/NewTasksModal';
 import { UserManagementModal } from './components/UserManagementModal';
 import { SupervisorManagementModal } from './components/SupervisorManagementModal';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
@@ -60,6 +61,9 @@ export default function App() {
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState<boolean>(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [hasFreshData, setHasFreshData] = useState<boolean>(false);
+  const [newTasksForUser, setNewTasksForUser] = useState<ActionItem[] | null>(null);
+  const newTasksPromptedFor = useRef<string | null>(null);
 
   // Department scoping is derived directly from the signed-in session — there
   // is no more URL-param or password-bypass path to acquire a locked dept.
@@ -155,6 +159,7 @@ export default function App() {
           if (isMounted) {
             setActions(fresh || []);
             saveActionsToStorage(fresh || []);
+            setHasFreshData(true);
           }
           return;
         } catch (err) {
@@ -245,6 +250,41 @@ export default function App() {
     if (!session || !session.departments) return actions;
     return actions.filter(a => isDeptInScope(session, a));
   }, [actions, session]);
+
+  // On app open, once the latest data has loaded, tell a department-scoped
+  // user which open tasks landed on their departments since they last
+  // dismissed this prompt (or in the past 7 days, the first time). Plant-wide
+  // roles aren't assigned tasks, so they're skipped.
+  useEffect(() => {
+    if (!hasFreshData || !session?.departments) return;
+    if (newTasksPromptedFor.current === session.username) return;
+    newTasksPromptedFor.current = session.username;
+
+    let since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    try {
+      const stored = localStorage.getItem(`samarth_last_seen_${session.username}`);
+      if (stored) since = Number(stored) || since;
+    } catch {
+      // storage unavailable — fall back to the 7-day window
+    }
+
+    const depts = session.departments;
+    const fresh = actions
+      .filter(a => a.status !== 'Completed' && depts.includes(a.dept) && new Date(a.timestamp).getTime() > since)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    if (fresh.length > 0) setNewTasksForUser(fresh);
+  }, [hasFreshData, session, actions]);
+
+  const dismissNewTasks = useCallback(() => {
+    if (session) {
+      try {
+        localStorage.setItem(`samarth_last_seen_${session.username}`, String(Date.now()));
+      } catch {
+        // storage unavailable — prompt will simply reappear next open
+      }
+    }
+    setNewTasksForUser(null);
+  }, [session]);
 
   // Compute live KPI stats
   const stats: SentinelStats = useMemo(() => {
@@ -864,6 +904,24 @@ export default function App() {
           onAdd={handleAddAction}
           lockedDepts={lockedDepts}
           supervisors={supervisors}
+          defaultIsMOM={activeTab === 'saturday_mom'}
+        />
+      )}
+
+      {/* New tasks since last visit */}
+      {session && newTasksForUser && (
+        <NewTasksModal
+          tasks={newTasksForUser}
+          displayName={session.displayName}
+          onOpenTask={(task) => {
+            dismissNewTasks();
+            setSelectedAction(task);
+          }}
+          onViewAll={() => {
+            dismissNewTasks();
+            setActiveTab('matrix');
+          }}
+          onClose={dismissNewTasks}
         />
       )}
 
