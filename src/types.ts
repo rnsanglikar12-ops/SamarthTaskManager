@@ -29,6 +29,8 @@ export interface ActionItem {
   isMOM?: boolean;
   isCFT?: boolean;
   machineNote?: string;
+  seriesOriginId?: string;
+  seriesStart?: string;
 }
 
 export interface DepartmentStructure {

@@ -19,6 +19,17 @@ import {
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
 import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
+
+function recurringSinceLabel(action: ActionItem): string | null {
+  if (action.recurrence === 'One-Time') return null;
+  const start = new Date(action.seriesStart || action.timestamp);
+  if (isNaN(start.getTime())) return null;
+  const days = Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000));
+  const running = days < 14 ? `${days} ${days === 1 ? 'day' : 'days'}` : `${Math.floor(days / 7)} weeks`;
+  const date = start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const origin = action.seriesOriginId ? ` · started as ${action.seriesOriginId}` : '';
+  return `Recurring since ${date}${origin} · running ${running}`;
+}
 import { uploadPhotoToGoogleSheet } from '../utils/dataService';
 import { compressImage } from '../utils/imageUtils';
 
@@ -277,6 +288,11 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               <p className="text-xs text-slate-500 mt-0.5">
                 Samarth Industries Operational Execution Matrix
               </p>
+              {recurringSinceLabel(action) && (
+                <p className="text-xs font-semibold text-purple-700 mt-0.5">
+                  {recurringSinceLabel(action)}
+                </p>
+              )}
             </div>
           </div>
           <button
