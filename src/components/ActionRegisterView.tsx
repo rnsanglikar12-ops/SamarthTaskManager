@@ -346,7 +346,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             <span>Broadcasts</span>
           </button>
 
-          {/* Recurring PM (2) */}
+          {/* Recurring PM */}
           <button
             onClick={() => {
               setActiveQuickFilter(activeQuickFilter === 'recurring' ? 'all' : 'recurring');
@@ -359,7 +359,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             }`}
           >
             <RefreshCw className="w-3 h-3 text-amber-600" />
-            <span>Recurring PM (2)</span>
+            <span>Recurring PM</span>
           </button>
 
           {/* Pending */}

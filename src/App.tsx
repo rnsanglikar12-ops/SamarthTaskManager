@@ -781,7 +781,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Recurring PM Tab (2 items) */}
+        {/* Recurring PM Tab */}
         {activeTab === 'recurring_pm' && (
           <div className="space-y-4">
             <div className="bg-white rounded-2xl border border-amber-200/80 p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-3">
