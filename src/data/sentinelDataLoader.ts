@@ -86,3 +86,11 @@ export function saveActionsToStorage(actions: ActionItem[]): void {
     }
   }
 }
+
+// Customer MOM action points are tagged through the tasks table's existing
+// free-text `category` column rather than a dedicated boolean flag.
+export const CUSTOMER_MOM_CATEGORY = 'Customer MOM';
+
+export function isCustomerMOM(action: Pick<ActionItem, 'category'>): boolean {
+  return action.category === CUSTOMER_MOM_CATEGORY;
+}

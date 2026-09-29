@@ -15,10 +15,11 @@ import {
   Check,
   AlertCircle,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Handshake
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
-import { isRaisedToOtherDept } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, isCustomerMOM, CUSTOMER_MOM_CATEGORY } from '../data/sentinelDataLoader';
 
 function recurringSinceLabel(action: ActionItem): string | null {
   if (action.recurrence === 'One-Time') return null;
@@ -59,6 +60,11 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const [uploadingSlot, setUploadingSlot] = useState<null | 'before' | 'after'>(null);
   const [isKaizen, setIsKaizen] = useState<boolean>(action.isKaizen || false);
   const [kaizenBenefit, setKaizenBenefit] = useState<string>(action.kaizenBenefit || '');
+  const [isCustomerMom, setIsCustomerMom] = useState<boolean>(isCustomerMOM(action));
+  // Unticking only clears the Customer MOM tag, never some other category.
+  const category = isCustomerMom
+    ? CUSTOMER_MOM_CATEGORY
+    : (isCustomerMOM(action) ? undefined : action.category);
 
   // Target Deadline revision state (Authority strictly with Plant Head / Secret Master)
   const [deadline, setDeadline] = useState<string>(action.deadline || '');
@@ -136,7 +142,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       attachedPhoto: attachedPhoto || undefined,
       afterPhoto: afterPhoto || undefined,
       isKaizen,
-      kaizenBenefit: isKaizen ? kaizenBenefit : undefined
+      kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      category
     });
     setPendingAction(null);
     if (ok) onClose();
@@ -161,7 +168,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       attachedPhoto: attachedPhoto || undefined,
       afterPhoto: afterPhoto || undefined,
       isKaizen,
-      kaizenBenefit: isKaizen ? kaizenBenefit : undefined
+      kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      category
     });
     setPendingAction(null);
     if (ok) onClose();
@@ -184,7 +192,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       attachedPhoto: attachedPhoto || undefined,
       afterPhoto: afterPhoto || undefined,
       isKaizen,
-      kaizenBenefit: isKaizen ? kaizenBenefit : undefined
+      kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      category
     });
     setPendingAction(null);
     if (ok) onClose();
@@ -212,7 +221,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       attachedPhoto: attachedPhoto || undefined,
       afterPhoto: afterPhoto || undefined,
       isKaizen,
-      kaizenBenefit: isKaizen ? kaizenBenefit : undefined
+      kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      category
     });
     setPendingAction(null);
     if (ok) onClose();
@@ -695,6 +705,24 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               disabled={!canEditTask}
               className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 outline-none shadow-2xs disabled:bg-slate-100 disabled:text-slate-400"
             />
+          </div>
+
+          {/* Customer MOM tag — lists the task under the Master Matrix's
+              Customer MOM filter. */}
+          <div className="p-3.5 bg-teal-50/50 border border-teal-200 rounded-xl">
+            <label className={`flex items-center gap-2 ${canEditTask ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+              <input
+                type="checkbox"
+                checked={isCustomerMom}
+                onChange={(e) => setIsCustomerMom(e.target.checked)}
+                disabled={!canEditTask}
+                className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4 disabled:opacity-50"
+              />
+              <span className={`font-bold text-xs flex items-center gap-1.5 ${canEditTask ? 'text-teal-800' : 'text-slate-400'}`}>
+                <Handshake className={`w-3.5 h-3.5 ${canEditTask ? 'text-teal-600' : 'text-slate-400'}`} />
+                <span>Customer MOM action point</span>
+              </span>
+            </label>
           </div>
 
           {/* Convert to Kaizen Toggle — only checkable once the task is actually

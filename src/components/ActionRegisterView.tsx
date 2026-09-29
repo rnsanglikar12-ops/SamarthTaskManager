@@ -4,7 +4,7 @@ import {
   FilterState, 
   ActionStatus 
 } from '../types';
-import { isRaisedToOtherDept, getTodayStr, isoToLocalDateStr } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, getTodayStr, isoToLocalDateStr, isCustomerMOM } from '../data/sentinelDataLoader';
 import { TASK_DEPARTMENTS, combineAllAssignees } from '../data/orgStructure';
 import { Supervisor } from '../utils/dataService';
 import { 
@@ -28,7 +28,8 @@ import {
   Camera,
   Image as ImageIcon,
   Flame,
-  Lock
+  Lock,
+  Handshake
 } from 'lucide-react';
 
 interface ActionRegisterViewProps {
@@ -43,7 +44,7 @@ interface ActionRegisterViewProps {
   supervisors?: Supervisor[];
 }
 
-type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'pending' | 'closed';
+type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'customer_mom' | 'pending' | 'closed';
 
 export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   actions,
@@ -94,6 +95,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
       if (activeQuickFilter === 'broadcast' && !item.isBroadcast) return false;
       if (activeQuickFilter === 'recurring' && item.recurrence === 'One-Time') return false;
       if (activeQuickFilter === 'verification' && item.status !== 'Under Verification') return false;
+      if (activeQuickFilter === 'customer_mom' && !isCustomerMOM(item)) return false;
       if (activeQuickFilter === 'pending' && item.status !== 'Pending') return false;
       if (activeQuickFilter === 'closed' && item.status !== 'Completed') return false;
 
@@ -392,6 +394,22 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
           >
             <Eye className="w-3 h-3 text-purple-500" />
             <span>Verification</span>
+          </button>
+
+          {/* Customer MOM */}
+          <button
+            onClick={() => {
+              setActiveQuickFilter(activeQuickFilter === 'customer_mom' ? 'all' : 'customer_mom');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
+              activeQuickFilter === 'customer_mom'
+                ? 'bg-teal-600 text-white shadow-2xs'
+                : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <Handshake className="w-3 h-3 text-teal-500" />
+            <span>Customer MOM</span>
           </button>
 
           {/* Closed */}
