@@ -17,8 +17,6 @@ import {
   X, 
   Eye, 
   ArrowUpDown,
-  AlignJustify,
-  LayoutGrid,
   Plus,
   RefreshCw,
   Radio,
@@ -61,7 +59,6 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   const [pageSize, setPageSize] = useState<number>(25);
   const [sortField, setSortField] = useState<keyof ActionItem>('id');
   const [sortAsc, setSortAsc] = useState<boolean>(false); // Default descending by ID matching #652 first
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all');
 
   // Today's operational date
@@ -245,12 +242,6 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
               ))}
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          {/* View Mode: Strict Table View */}
-          <div className="flex items-center bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200/70 text-xs font-semibold text-slate-700 gap-1.5 shadow-2xs">
-            <AlignJustify className="w-3.5 h-3.5 text-blue-600" />
-            <span className="text-[11px]">Table View</span>
           </div>
 
           {/* Create Task Button matching image.png */}
