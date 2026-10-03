@@ -10,7 +10,8 @@ import {
   ResponsiveContainer, 
   PieChart, 
   Pie, 
-  Cell
+  Cell,
+  LabelList
 } from 'recharts';
 import { ActionItem } from '../types';
 import { TASK_DEPARTMENTS } from '../data/orgStructure';
@@ -28,6 +29,8 @@ interface AnalyticsViewProps {
   onSelectDept: (dept: string) => void;
   onSelectPriority: (priority: string) => void;
   lockedDept?: string | null;
+  // Department picked in the header, if any — relabels the overview for it.
+  scopeDept?: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -43,11 +46,28 @@ const PRIORITY_COLORS: Record<string, string> = {
   'B': '#38bdf8'
 };
 
+// Always-visible bar values (instead of hover-only tooltips). Zero values are
+// skipped so empty bars don't carry a stray "0".
+const hideZero = (value: any) => (Number(value) > 0 ? value : '');
+
+// Value inside a stacked segment, drawn only when the segment is wide enough
+// to hold it — the row total at the bar's end covers narrow segments.
+const SegmentLabel = (props: any) => {
+  const { x, y, width, height, value } = props;
+  if (!value || width < 20) return null;
+  return (
+    <text x={x + width / 2} y={y + height / 2} fill="#0f172a" fontSize={10} fontWeight={700} textAnchor="middle" dominantBaseline="central">
+      {value}
+    </text>
+  );
+};
+
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ 
   actions, 
   onSelectDept, 
   onSelectPriority,
-  lockedDept = null
+  lockedDept = null,
+  scopeDept = null
 }) => {
   // 1. Department Breakdown (Total vs Completed vs Pending)
   const deptData = useMemo(() => {
@@ -69,9 +89,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       }
     });
 
-    return Object.values(map)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10); // Top 10 departments
+    // Every department with at least one task, not just the busiest few.
+    return Object.values(map).sort((a, b) => b.total - a.total);
   }, [actions]);
 
   // 2. Status Distribution Data
@@ -116,10 +135,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       }
     });
 
+    // Every assignee, so each department's people (and its unassigned
+    // "<Dept> Default" placeholder) show up, not only the busiest few.
     return Object.values(map)
       .filter(o => o.owner !== 'Unassigned')
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
+      .sort((a, b) => b.total - a.total);
   }, [actions]);
 
   const totalActions = actions.length;
@@ -136,7 +156,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <div className="flex items-center gap-2">
               <Factory className="w-5 h-5 text-[#38bdf8]" />
               <h2 className="text-xl font-bold font-heading text-[#f8fafc]">
-                Operational Control Center
+                Operational Control Center{scopeDept ? ` — ${scopeDept}` : ''}
               </h2>
             </div>
             <p className="text-xs text-[#94a3b8] mt-1 max-w-2xl">
@@ -146,7 +166,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
           <div className="flex items-center gap-4 bg-[#0f172a] px-4 py-2.5 rounded-xl border border-[#334155]">
             <div className="text-right">
-              <span className="text-[10px] text-[#94a3b8] uppercase font-semibold block">Plant Health Index</span>
+              <span className="text-[10px] text-[#94a3b8] uppercase font-semibold block">{scopeDept ? 'Dept Health Index' : 'Plant Health Index'}</span>
               <span className="text-2xl font-extrabold font-heading text-[#22c55e]">{overallRate}%</span>
             </div>
             <div className="w-12 h-12 rounded-full border-4 border-[#334155] flex items-center justify-center relative">
@@ -186,15 +206,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <TrendingUp className="w-4 h-4 text-[#38bdf8]" />
                 Department-wise Action Volume & Resolution
               </h3>
-              <p className="text-xs text-[#94a3b8]">Top departments by action items loaded</p>
+              <p className="text-xs text-[#94a3b8]">All departments, by action items loaded</p>
             </div>
           </div>
 
-          <div className="h-72 w-full">
+          <div className="w-full overflow-x-auto">
+          <div className="h-80" style={{ minWidth: Math.max(deptData.length * 46, 320) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={deptData}
-                margin={{ top: 10, right: 10, left: -15, bottom: 25 }}
+                margin={{ top: 22, right: 10, left: -15, bottom: 45 }}
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                 <XAxis 
@@ -219,7 +240,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                     if (lockedDept) return;
                     if (entry && entry.dept) onSelectDept(entry.dept);
                   }}
-                />
+                >
+                  <LabelList dataKey="completed" position="top" formatter={hideZero} style={{ fontSize: 10, fill: '#e2e8f0', fontWeight: 600 }} />
+                </Bar>
                 <Bar 
                   dataKey="pending" 
                   name="Pending / In-Process" 
@@ -230,9 +253,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                     if (lockedDept) return;
                     if (entry && entry.dept) onSelectDept(entry.dept);
                   }}
-                />
+                >
+                  <LabelList dataKey="pending" position="top" formatter={hideZero} style={{ fontSize: 10, fill: '#e2e8f0', fontWeight: 600 }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
           </div>
         </div>
 
@@ -317,16 +343,17 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <Users className="w-4 h-4 text-[#38bdf8]" />
                 Key Stakeholders & Assignee Workload
               </h3>
-              <p className="text-xs text-[#94a3b8]">Distribution of actions assigned across plant leads</p>
+              <p className="text-xs text-[#94a3b8]">Every assignee across all departments — scroll for more</p>
             </div>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="max-h-[26rem] overflow-y-auto pr-1">
+          <div className="w-full" style={{ height: Math.max(ownerData.length * 26 + 60, 200) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={ownerData}
                 layout="vertical"
-                margin={{ top: 5, right: 20, left: 40, bottom: 5 }}
+                margin={{ top: 5, right: 36, left: 0, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" />
                 <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} />
@@ -334,16 +361,23 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   dataKey="owner" 
                   type="category" 
                   tick={{ fontSize: 11, fill: '#94a3b8' }} 
-                  width={90}
+                  width={150}
+                  interval={0}
                 />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#0f172a', borderRadius: '8px', color: '#f8fafc', fontSize: '12px', border: '1px solid #334155' }}
                 />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Bar dataKey="completed" name="Completed" stackId="a" fill="#22c55e" />
-                <Bar dataKey="pending" name="Open / Pending" stackId="a" fill="#38bdf8" />
+                <Legend verticalAlign="top" wrapperStyle={{ fontSize: '12px', paddingBottom: '6px' }} />
+                <Bar dataKey="completed" name="Completed" stackId="a" fill="#22c55e">
+                  <LabelList dataKey="completed" content={SegmentLabel} />
+                </Bar>
+                <Bar dataKey="pending" name="Open / Pending" stackId="a" fill="#38bdf8">
+                  <LabelList dataKey="pending" content={SegmentLabel} />
+                  <LabelList dataKey="total" position="right" style={{ fontSize: 10, fill: '#e2e8f0', fontWeight: 700 }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
           </div>
         </div>
 

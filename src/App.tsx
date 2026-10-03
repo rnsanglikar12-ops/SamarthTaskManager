@@ -48,6 +48,54 @@ import { archivePhotoToDrive, runWithConcurrency } from './utils/driveArchive';
 import { AuthUser, can, isDeptInScope, getSession, setSession as persistSession, clearSession } from './utils/auth';
 import { CheckCircle2, Calendar, RotateCw, Users, Crown, Lock } from 'lucide-react';
 
+function computeStats(list: ActionItem[]): SentinelStats {
+  let completed = 0;
+  let inProcess = 0;
+  let pending = 0;
+  let underVerification = 0;
+  let onHold = 0;
+  let criticalPriorityA = 0;
+  let standardPriorityB = 0;
+  let kaizenCount = 0;
+  let overdueCount = 0;
+
+  const today = getTodayStr();
+
+  list.forEach(a => {
+    if (a.status === 'Completed') completed++;
+    else if (a.status === 'In process') inProcess++;
+    else if (a.status === 'Under Verification') underVerification++;
+    else if (a.status === 'Hold') onHold++;
+    else pending++;
+
+    if (a.priority === 'A') criticalPriorityA++;
+    else standardPriorityB++;
+
+    if (isKaizenAction(a)) kaizenCount++;
+
+    if (a.status !== 'Completed' && a.deadline && a.deadline <= today) {
+      overdueCount++;
+    }
+  });
+
+  const total = list.length;
+  const complianceRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return {
+    totalActions: total,
+    completed,
+    inProcess,
+    pending,
+    underVerification,
+    onHold,
+    criticalPriorityA,
+    standardPriorityB,
+    overdueCount,
+    complianceRate,
+    kaizenCount
+  };
+}
+
 export default function App() {
   const [session, setSession] = useState<AuthUser | null>(() => getSession());
   const [actions, setActions] = useState<ActionItem[]>(() => getInitialActions());
@@ -287,53 +335,17 @@ export default function App() {
   }, [session]);
 
   // Compute live KPI stats
-  const stats: SentinelStats = useMemo(() => {
-    let completed = 0;
-    let inProcess = 0;
-    let pending = 0;
-    let underVerification = 0;
-    let onHold = 0;
-    let criticalPriorityA = 0;
-    let standardPriorityB = 0;
-    let kaizenCount = 0;
-    let overdueCount = 0;
+  const stats: SentinelStats = useMemo(() => computeStats(visibleActions), [visibleActions]);
 
-    const today = getTodayStr();
-
-    visibleActions.forEach(a => {
-      if (a.status === 'Completed') completed++;
-      else if (a.status === 'In process') inProcess++;
-      else if (a.status === 'Under Verification') underVerification++;
-      else if (a.status === 'Hold') onHold++;
-      else pending++;
-
-      if (a.priority === 'A') criticalPriorityA++;
-      else standardPriorityB++;
-
-      if (isKaizenAction(a)) kaizenCount++;
-
-      if (a.status !== 'Completed' && a.deadline && a.deadline <= today) {
-        overdueCount++;
-      }
-    });
-
-    const total = visibleActions.length;
-    const complianceRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    return {
-      totalActions: total,
-      completed,
-      inProcess,
-      pending,
-      underVerification,
-      onHold,
-      criticalPriorityA,
-      standardPriorityB,
-      overdueCount,
-      complianceRate,
-      kaizenCount
-    };
-  }, [visibleActions]);
+  // The Cockpit follows the header's department picker: once a department is
+  // selected it shows that department's own picture — the tasks it owns or
+  // raised to another department, the same set its head sees and the Master
+  // Matrix shows for that filter.
+  const cockpitActions = useMemo(() => {
+    if (!filters.dept) return visibleActions;
+    return visibleActions.filter(a => a.dept === filters.dept || a.originatorDept === filters.dept);
+  }, [visibleActions, filters.dept]);
+  const cockpitStats: SentinelStats = useMemo(() => computeStats(cockpitActions), [cockpitActions]);
 
   // Update status directly & sync across links
   const handleUpdateStatus = useCallback(async (id: string, newStatus: ActionStatus): Promise<boolean> => {
@@ -701,8 +713,19 @@ export default function App() {
         {/* Cockpit View (Executive Analytics & KPI Cards) */}
         {activeTab === 'cockpit' && (
           <div className="space-y-6">
+            {filters.dept && (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700">
+                <span>Cockpit for <strong>{filters.dept}</strong> — tasks it owns or raised to other departments.</span>
+                <button
+                  onClick={() => setGuardedFilters(prev => ({ ...prev, dept: '' }))}
+                  className="px-2.5 py-1 rounded-full bg-white border border-slate-200 hover:bg-slate-50 font-semibold text-blue-700"
+                >
+                  {lockedDepts ? 'Show all my departments' : 'Show all departments'}
+                </button>
+              </div>
+            )}
             <StatsOverview
-              stats={stats}
+              stats={cockpitStats}
               onFilterClick={(type, val) => {
                 setActiveTab('matrix');
                 if (type === 'status') setGuardedFilters(prev => ({ ...prev, status: val }));
@@ -712,7 +735,8 @@ export default function App() {
             />
             <Suspense fallback={<div className="text-center py-10 text-xs text-slate-400">Loading analytics…</div>}>
               <AnalyticsView
-                actions={visibleActions}
+                actions={cockpitActions}
+                scopeDept={filters.dept || null}
                 lockedDept={lockedDepts?.[0] ?? null}
                 onSelectDept={(dept) => {
                   if (!guardDeptSelect(dept)) return;
