@@ -123,6 +123,7 @@ interface TaskRow {
   series_origin_id?: string | null;
   series_start?: string | null;
   updated_at?: string;
+  imported?: boolean;
 }
 
 function rowToActionItem(row: TaskRow): ActionItem {
@@ -150,6 +151,7 @@ function rowToActionItem(row: TaskRow): ActionItem {
     machineNote: row.machine_note || undefined,
     seriesOriginId: row.series_origin_id || undefined,
     seriesStart: row.series_start || undefined,
+    imported: row.imported || undefined,
     closedAt: row.status === 'Completed' ? row.updated_at : undefined
   };
 }

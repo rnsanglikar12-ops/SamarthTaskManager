@@ -31,6 +31,9 @@ export interface ActionItem {
   machineNote?: string;
   seriesOriginId?: string;
   seriesStart?: string;
+  // Loaded from the old Sheet register at the Supabase cutover rather than
+  // raised in this app (see migration 0006). Read-only — never written back.
+  imported?: boolean;
 }
 
 export interface DepartmentStructure {

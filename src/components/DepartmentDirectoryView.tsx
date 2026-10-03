@@ -134,7 +134,9 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
     });
     const bucket = (dateStr: string) => weeks.find(w => dateStr >= w.start && dateStr <= w.end);
     velocityActions.forEach(a => {
-      const created = bucket(isoToLocalDateStr(a.timestamp));
+      // The legacy backlog bulk-loaded at the cutover wasn't raised that
+      // week, so it doesn't count as generated (its closures still count).
+      const created = a.imported ? undefined : bucket(isoToLocalDateStr(a.timestamp));
       if (created) created.generated += 1;
       if (a.status === 'Completed') {
         const closed = bucket(isoToLocalDateStr(a.closedAt));
@@ -259,7 +261,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                 <span>Plant-wide Velocity: New Tasks Generated vs Closed (Last 4 Weeks)</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Incoming abnormalities compared with shopfloor verified closures
+                Incoming abnormalities compared with shopfloor verified closures. Tasks imported from the old register on 15 Sep aren't counted as generated.
               </p>
             </div>
 
