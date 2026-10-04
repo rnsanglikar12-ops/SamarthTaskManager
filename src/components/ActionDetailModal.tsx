@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Loader2,
   ExternalLink,
-  Handshake
+  Handshake,
+  Upload,
+  FileText
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
 import { isRaisedToOtherDept, isCustomerMOM, CUSTOMER_MOM_CATEGORY } from '../data/sentinelDataLoader';
@@ -31,7 +33,7 @@ function recurringSinceLabel(action: ActionItem): string | null {
   const origin = action.seriesOriginId ? ` · started as ${action.seriesOriginId}` : '';
   return `Recurring since ${date}${origin} · running ${running}`;
 }
-import { uploadPhotoToGoogleSheet } from '../utils/dataService';
+import { uploadPhotoToGoogleSheet, uploadDocumentToStorage } from '../utils/dataService';
 import { compressImage } from '../utils/imageUtils';
 
 interface ActionDetailModalProps {
@@ -57,7 +59,9 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const [priority, setPriority] = useState<Priority>(action.priority);
   const [attachedPhoto, setAttachedPhoto] = useState<string>(action.attachedPhoto || '');
   const [afterPhoto, setAfterPhoto] = useState<string>(action.afterPhoto || '');
-  const [uploadingSlot, setUploadingSlot] = useState<null | 'before' | 'after'>(null);
+  const [evidencePdf, setEvidencePdf] = useState<string>(action.evidencePdf || '');
+  const [uploadingSlot, setUploadingSlot] = useState<null | 'before' | 'after' | 'pdf'>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [isKaizen, setIsKaizen] = useState<boolean>(action.isKaizen || false);
   const [kaizenBenefit, setKaizenBenefit] = useState<string>(action.kaizenBenefit || '');
   const [isCustomerMom, setIsCustomerMom] = useState<boolean>(isCustomerMOM(action));
@@ -143,6 +147,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       afterPhoto: afterPhoto || undefined,
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      evidencePdf: evidencePdf || undefined,
       category
     });
     setPendingAction(null);
@@ -169,6 +174,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       afterPhoto: afterPhoto || undefined,
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      evidencePdf: evidencePdf || undefined,
       category
     });
     setPendingAction(null);
@@ -193,6 +199,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       afterPhoto: afterPhoto || undefined,
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      evidencePdf: evidencePdf || undefined,
       category
     });
     setPendingAction(null);
@@ -222,6 +229,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       afterPhoto: afterPhoto || undefined,
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      evidencePdf: evidencePdf || undefined,
       category
     });
     setPendingAction(null);
@@ -247,6 +255,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingSlot(type);
+    setUploadError(null);
     try {
       const base64 = await compressImage(file);
       const url = await uploadPhotoToGoogleSheet(base64, file.name);
@@ -256,11 +265,74 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         } else {
           setAfterPhoto(url);
         }
+      } else {
+        setUploadError('Photo upload failed. Check your connection and try again.');
       }
+    } finally {
+      setUploadingSlot(null);
+      e.target.value = '';
+    }
+  };
+
+  const MAX_PDF_MB = 10;
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setUploadError('Only PDF files can be attached here.');
+      return;
+    }
+    if (file.size > MAX_PDF_MB * 1024 * 1024) {
+      setUploadError(`PDF is larger than ${MAX_PDF_MB} MB. Please attach a smaller file.`);
+      return;
+    }
+    setUploadingSlot('pdf');
+    setUploadError(null);
+    try {
+      const url = await uploadDocumentToStorage(file);
+      if (url) setEvidencePdf(url);
+      else setUploadError('PDF upload failed. Check your connection and try again.');
     } finally {
       setUploadingSlot(null);
     }
   };
+
+  // Camera opens the phone's rear camera directly; Upload picks an existing
+  // photo from the gallery or computer.
+  const photoPickers = (type: 'before' | 'after') => (
+    <div className="flex flex-col items-center justify-center w-full h-full py-3 gap-2.5 text-slate-500">
+      {type === 'before'
+        ? <Camera className="w-6 h-6 text-slate-400" />
+        : <ImageIcon className="w-6 h-6 text-slate-400" />}
+      <span className="text-xs font-semibold">{type === 'before' ? '[ B ] Before Photo' : '[ A ] After Photo'}</span>
+      <div className="flex items-center gap-2">
+        <label className={`cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-xs ${isBusy || !canEditTask ? 'opacity-60 pointer-events-none' : ''}`}>
+          <Camera className="w-3.5 h-3.5" />
+          <span>Camera</span>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            disabled={isBusy || !canEditTask}
+            onChange={(e) => handlePhotoUpload(type, e)}
+          />
+        </label>
+        <label className={`cursor-pointer bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-2xs ${isBusy || !canEditTask ? 'opacity-60 pointer-events-none' : ''}`}>
+          <Upload className="w-3.5 h-3.5 text-slate-500" />
+          <span>Upload</span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={isBusy || !canEditTask}
+            onChange={(e) => handlePhotoUpload(type, e)}
+          />
+        </label>
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
@@ -568,7 +640,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                 {uploadingSlot === 'before' ? (
                   <div className="flex flex-col items-center gap-2 text-slate-500">
                     <Loader2 className="w-6 h-6 animate-spin" />
-                    <span className="text-xs font-semibold">Uploading to Drive…</span>
+                    <span className="text-xs font-semibold">Uploading photo…</span>
                   </div>
                 ) : attachedPhoto ? (
                   <div className="relative w-full h-full min-h-[120px] flex flex-col items-center justify-center gap-2">
@@ -592,18 +664,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Before Condition Proof</span>
                   </div>
                 ) : (
-                  <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full py-4 text-slate-500 hover:text-blue-600 transition-colors">
-                    <Camera className="w-6 h-6 mb-1.5 text-slate-400" />
-                    <span className="text-xs font-semibold">[ B ] Attach Before Photo</span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">Click to upload JPG / PNG</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={isBusy}
-                      onChange={(e) => handlePhotoUpload('before', e)}
-                    />
-                  </label>
+                  photoPickers('before')
                 )}
               </div>
 
@@ -612,7 +673,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                 {uploadingSlot === 'after' ? (
                   <div className="flex flex-col items-center gap-2 text-slate-500">
                     <Loader2 className="w-6 h-6 animate-spin" />
-                    <span className="text-xs font-semibold">Uploading to Drive…</span>
+                    <span className="text-xs font-semibold">Uploading photo…</span>
                   </div>
                 ) : afterPhoto ? (
                   <div className="relative w-full h-full min-h-[120px] flex flex-col items-center justify-center gap-2">
@@ -636,21 +697,62 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">After Resolution Proof</span>
                   </div>
                 ) : (
-                  <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full py-4 text-slate-500 hover:text-blue-600 transition-colors">
-                    <ImageIcon className="w-6 h-6 mb-1.5 text-slate-400" />
-                    <span className="text-xs font-semibold">[ A ] Attach After Photo</span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">Click to upload JPG / PNG</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={isBusy}
-                      onChange={(e) => handlePhotoUpload('after', e)}
-                    />
-                  </label>
+                  photoPickers('after')
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Evidence PDF */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Evidence Document (PDF)
+            </label>
+            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 flex flex-wrap items-center gap-3">
+              {uploadingSlot === 'pdf' ? (
+                <span className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Uploading PDF…
+                </span>
+              ) : evidencePdf ? (
+                <>
+                  <a
+                    href={evidencePdf}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>View PDF</span>
+                  </a>
+                  {canEditTask && (
+                    <button
+                      type="button"
+                      onClick={() => setEvidencePdf('')}
+                      className="ml-auto text-xs text-red-600 hover:underline font-medium"
+                    >
+                      Remove PDF
+                    </button>
+                  )}
+                </>
+              ) : (
+                <label className={`cursor-pointer bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-2xs ${isBusy || !canEditTask ? 'opacity-60 pointer-events-none' : ''}`}>
+                  <FileText className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Attach PDF</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                    disabled={isBusy || !canEditTask}
+                    onChange={handlePdfUpload}
+                  />
+                </label>
+              )}
+              <span className="text-[10px] text-slate-400">Complaint letter, inspection report or closure record · max 10 MB</span>
+            </div>
+            {uploadError && (
+              <p className="mt-1.5 text-[11px] font-semibold text-red-600">{uploadError}</p>
+            )}
           </div>
 
           {/* Editable Status & Priority Controls */}
@@ -720,7 +822,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               />
               <span className={`font-bold text-xs flex items-center gap-1.5 ${canEditTask ? 'text-teal-800' : 'text-slate-400'}`}>
                 <Handshake className={`w-3.5 h-3.5 ${canEditTask ? 'text-teal-600' : 'text-slate-400'}`} />
-                <span>Customer MOM action point</span>
+                <span>Customer Complaint / MOM</span>
               </span>
             </label>
           </div>

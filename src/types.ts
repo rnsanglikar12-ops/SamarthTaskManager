@@ -22,6 +22,8 @@ export interface ActionItem {
   closedAt?: string;
   originatorDept: string;
   afterPhoto?: string;
+  // Public Storage URL of an optional PDF evidence document.
+  evidencePdf?: string;
   isKaizen?: boolean;
   kaizenBenefit?: string;
   isBroadcast?: boolean;
@@ -64,6 +66,8 @@ export interface OperationalStats {
   underVerification: number;
   onHold: number;
   criticalPriorityA: number;
+  // Priority A tasks not yet Completed.
+  openPriorityA: number;
   standardPriorityB: number;
   overdueCount: number;
   complianceRate: number;

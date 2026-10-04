@@ -55,6 +55,7 @@ function computeStats(list: ActionItem[]): SentinelStats {
   let underVerification = 0;
   let onHold = 0;
   let criticalPriorityA = 0;
+  let openPriorityA = 0;
   let standardPriorityB = 0;
   let kaizenCount = 0;
   let overdueCount = 0;
@@ -68,7 +69,10 @@ function computeStats(list: ActionItem[]): SentinelStats {
     else if (a.status === 'Hold') onHold++;
     else pending++;
 
-    if (a.priority === 'A') criticalPriorityA++;
+    if (a.priority === 'A') {
+      criticalPriorityA++;
+      if (a.status !== 'Completed') openPriorityA++;
+    }
     else standardPriorityB++;
 
     if (isKaizenAction(a)) kaizenCount++;
@@ -89,6 +93,7 @@ function computeStats(list: ActionItem[]): SentinelStats {
     underVerification,
     onHold,
     criticalPriorityA,
+    openPriorityA,
     standardPriorityB,
     overdueCount,
     complianceRate,

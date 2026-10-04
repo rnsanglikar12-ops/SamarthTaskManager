@@ -29,7 +29,8 @@ export function exportActionsToCsv(actions: ExportRow[], filename = 'samarth_ind
     'Is Kaizen',
     'Kaizen Benefit',
     'Before Photo (Drive Link)',
-    'After Photo (Drive Link)'
+    'After Photo (Drive Link)',
+    'Evidence PDF'
   ];
 
   // Free-text fields (desc, actionNotes, owner, ...) come from real users and
@@ -63,7 +64,8 @@ export function exportActionsToCsv(actions: ExportRow[], filename = 'samarth_ind
     escapeCsv(a.isKaizen ? 'Yes' : 'No'),
     escapeCsv(a.kaizenBenefit || ''),
     escapeCsv(a.attachedPhotoDriveLink || ''),
-    escapeCsv(a.afterPhotoDriveLink || '')
+    escapeCsv(a.afterPhotoDriveLink || ''),
+    escapeCsv(a.evidencePdf || '')
   ].join(','));
 
   const csvContent = [headers.join(','), ...rows].join('\r\n');

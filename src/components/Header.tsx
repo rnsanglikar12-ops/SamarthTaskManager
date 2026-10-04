@@ -442,19 +442,37 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-5 text-xs text-slate-700">
-              {/* Signed-in user */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <ShieldCheck className="w-4 h-4 text-blue-600" />
-                  <span className="font-bold text-sm text-slate-900">{session.displayName}</span>
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  {session.role}{session.departments ? ` • ${session.departments.join(', ')}` : ' • Plant-wide'}
-                </div>
+              {/* Nav tabs — first, so the everyday screens are visible without scrolling */}
+              <div className="space-y-1">
+                {navTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                        isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-slate-500" />
+                        {tab.label}
+                      </span>
+                      {tab.badge && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-slate-100 text-slate-600'}`}>
+                          {tab.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-
               {/* Department Scope */}
-              <div>
+              <div className="border-t border-slate-200 pt-3">
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                   Department Scope
                 </div>
@@ -503,40 +521,22 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className={`w-2 h-2 rounded-full ${isGoogleSheetConnected() ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></span>
               </button>
 
-              {/* Account actions */}
-              <div className="border-t border-slate-200 pt-3 space-y-1">
-                {accountMenuItems(() => setIsMobileMenuOpen(false))}
+              {/* Signed-in user + account actions (Manage Users etc.) — last */}
+              <div className="border-t border-slate-200 pt-3 space-y-2">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                    <span className="font-bold text-sm text-slate-900">{session.displayName}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {session.role}{session.departments ? ` • ${session.departments.join(', ')}` : ' • Plant-wide'}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {accountMenuItems(() => setIsMobileMenuOpen(false))}
+                </div>
               </div>
 
-              {/* Nav tabs */}
-              <div className="border-t border-slate-200 pt-3 space-y-1">
-                {navTabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        setActiveTab(tab.id);
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
-                        isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Icon className="w-4 h-4 text-slate-500" />
-                        {tab.label}
-                      </span>
-                      {tab.badge && (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-slate-100 text-slate-600'}`}>
-                          {tab.badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           </div>
         </div>

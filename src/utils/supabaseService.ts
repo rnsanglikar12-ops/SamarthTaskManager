@@ -113,6 +113,7 @@ interface TaskRow {
   timestamp: string;
   originator_dept: string;
   after_photo: string | null;
+  evidence_pdf?: string | null;
   is_kaizen: boolean;
   kaizen_benefit: string | null;
   is_broadcast: boolean;
@@ -142,6 +143,7 @@ function rowToActionItem(row: TaskRow): ActionItem {
     timestamp: row.timestamp,
     originatorDept: row.originator_dept,
     afterPhoto: row.after_photo || undefined,
+    evidencePdf: row.evidence_pdf || undefined,
     isKaizen: row.is_kaizen,
     kaizenBenefit: row.kaizen_benefit || undefined,
     isBroadcast: row.is_broadcast,
@@ -171,6 +173,7 @@ function actionToRow(action: Omit<ActionItem, 'id'> & { id?: string }): Omit<Tas
     timestamp: action.timestamp,
     originator_dept: action.originatorDept,
     after_photo: action.afterPhoto || null,
+    evidence_pdf: action.evidencePdf || null,
     is_kaizen: Boolean(action.isKaizen),
     kaizen_benefit: action.kaizenBenefit || null,
     is_broadcast: Boolean(action.isBroadcast),
@@ -268,6 +271,25 @@ export async function uploadPhotoToGoogleSheet(base64: string, filename?: string
     return data.publicUrl;
   } catch (err) {
     console.warn('Failed to upload photo to Supabase Storage:', err);
+    return null;
+  }
+}
+
+// Uploads a document (e.g. a PDF) as-is — no re-encoding — to the same
+// public task-photos bucket, returning its public URL.
+export async function uploadDocumentToStorage(file: File): Promise<string | null> {
+  if (!isGoogleSheetConnected()) return null;
+  try {
+    const path = `${Date.now()}_${file.name || 'document.pdf'}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const { error } = await getClient().storage.from('task-photos').upload(path, file, { contentType: file.type || 'application/pdf' });
+    if (error) {
+      console.warn('Supabase Storage rejected the document upload:', error.message);
+      return null;
+    }
+    const { data } = getClient().storage.from('task-photos').getPublicUrl(path);
+    return data.publicUrl;
+  } catch (err) {
+    console.warn('Failed to upload document to Supabase Storage:', err);
     return null;
   }
 }

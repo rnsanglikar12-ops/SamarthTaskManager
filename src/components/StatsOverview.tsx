@@ -22,7 +22,7 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, onFilterCli
       <div 
         id="stat-card-total"
         onClick={() => onFilterClick && onFilterClick('clear', null)}
-        className="bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#38bdf8] hover:shadow-sky-500/10 transition-all cursor-pointer group"
+        className="order-1 bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#38bdf8] hover:shadow-sky-500/10 transition-all cursor-pointer group"
       >
         <div className="flex items-center justify-between text-[#94a3b8] mb-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">Total Items</span>
@@ -42,7 +42,7 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, onFilterCli
       <div 
         id="stat-card-completed"
         onClick={() => onFilterClick && onFilterClick('status', 'Completed')}
-        className="bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#22c55e] hover:shadow-emerald-500/10 transition-all cursor-pointer group"
+        className="order-2 bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#22c55e] hover:shadow-emerald-500/10 transition-all cursor-pointer group"
       >
         <div className="flex items-center justify-between text-[#22c55e] mb-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">Resolved</span>
@@ -64,18 +64,18 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, onFilterCli
       <div 
         id="stat-card-priority-a"
         onClick={() => onFilterClick && onFilterClick('priority', 'A')}
-        className="bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#ef4444] hover:shadow-rose-500/10 transition-all cursor-pointer group relative overflow-hidden"
+        className="order-5 sm:order-3 bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#ef4444] hover:shadow-rose-500/10 transition-all cursor-pointer group relative overflow-hidden"
       >
         <div className="flex items-center justify-between text-[#ef4444] mb-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">Priority A</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">Priority A Open</span>
           <Flame className="w-4 h-4 text-[#ef4444] group-hover:scale-110 transition-transform" />
         </div>
         <div className="flex items-baseline justify-between">
-          <span className="text-2xl sm:text-3xl font-extrabold font-heading text-[#ef4444]">{stats.criticalPriorityA}</span>
-          <span className="text-[11px] font-bold text-[#ef4444] font-mono">Critical</span>
+          <span className="text-2xl sm:text-3xl font-extrabold font-heading text-[#ef4444]">{stats.openPriorityA}</span>
+          <span className="text-[11px] font-bold text-[#ef4444] font-mono">Not closed</span>
         </div>
         <div className="mt-2 text-[11px] text-[#94a3b8] flex items-center justify-between">
-          <span className="text-rose-300 font-medium">High Urgency CAPA</span>
+          <span className="text-rose-300 font-medium">of {stats.criticalPriorityA} Priority A</span>
           <ArrowUpRight className="w-3.5 h-3.5 text-[#ef4444] opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       </div>
@@ -84,7 +84,7 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, onFilterCli
       <div 
         id="stat-card-in-process"
         onClick={() => onFilterClick && onFilterClick('status', 'In process')}
-        className="bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#f59e0b] hover:shadow-amber-500/10 transition-all cursor-pointer group"
+        className="order-4 bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#f59e0b] hover:shadow-amber-500/10 transition-all cursor-pointer group"
       >
         <div className="flex items-center justify-between text-[#f59e0b] mb-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">In Progress</span>
@@ -104,7 +104,7 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, onFilterCli
       <div 
         id="stat-card-pending"
         onClick={() => onFilterClick && onFilterClick('status', 'Pending')}
-        className="bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-slate-500 hover:shadow-slate-500/10 transition-all cursor-pointer group"
+        className="order-3 sm:order-5 bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-slate-500 hover:shadow-slate-500/10 transition-all cursor-pointer group"
       >
         <div className="flex items-center justify-between text-[#94a3b8] mb-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">Pending</span>
@@ -124,7 +124,7 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ stats, onFilterCli
       <div 
         id="stat-card-kaizen"
         onClick={() => onFilterClick && onFilterClick('kaizen', true)}
-        className="bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#f59e0b] hover:shadow-amber-500/10 transition-all cursor-pointer group"
+        className="order-6 bg-[#1e293b] rounded-xl p-4 border border-[#334155] shadow-md hover:border-[#f59e0b] hover:shadow-amber-500/10 transition-all cursor-pointer group"
       >
         <div className="flex items-center justify-between text-[#f59e0b] mb-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-[#94a3b8]">DSI Kaizens</span>

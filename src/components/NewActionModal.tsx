@@ -3,7 +3,7 @@ import { ActionItem, Priority, Recurrence } from '../types';
 import { TASK_DEPARTMENTS, combineAssigneesForDept, getDefaultAssignee } from '../data/orgStructure';
 import { Supervisor } from '../utils/dataService';
 import { CUSTOMER_MOM_CATEGORY } from '../data/sentinelDataLoader';
-import { uploadPhotoToGoogleSheet } from '../utils/dataService';
+import { uploadPhotoToGoogleSheet, uploadDocumentToStorage } from '../utils/dataService';
 import { compressImage } from '../utils/imageUtils';
 import {
   X,
@@ -17,7 +17,8 @@ import {
   ChevronDown,
   Lock,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  FileText
 } from 'lucide-react';
 
 interface NewActionModalProps {
@@ -30,7 +31,14 @@ interface NewActionModalProps {
 }
 
 const MOM_TRIGGER = '📋 Saturday MOM Operational Action';
-const CUSTOMER_MOM_TRIGGER = '🤝 Customer MOM Action Point';
+const CUSTOMER_MOM_TRIGGER = '🤝 Customer Complaint / MOM';
+
+// Default target date for a new task: three days from today (local date).
+function defaultDeadline(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export const NewActionModal: React.FC<NewActionModalProps> = ({
   isOpen,
@@ -58,7 +66,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   const [priority, setPriority] = useState<Priority>('B');
   const [recurrenceOption, setRecurrenceOption] = useState<string>('One-Time Action');
   const [machineEqNo, setMachineEqNo] = useState('PDC-02');
-  const [targetDeadline, setTargetDeadline] = useState('2026-09-18');
+  const [targetDeadline, setTargetDeadline] = useState(defaultDeadline);
   // Responsible (executing) department — freely selectable even for a
   // DeptHead, so they can raise a CFT Handshake task to another department.
   // Defaults to the signed-in user's own (first) department.
@@ -78,6 +86,9 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   const [originatorDeptTouched, setOriginatorDeptTouched] = useState(false);
   const [owner, setOwner] = useState(getDefaultAssignee(lockedDepts?.[0] || 'Quality'));
   const [problemPhoto, setProblemPhoto] = useState<string>('');
+  const [evidencePdf, setEvidencePdf] = useState<string>('');
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Department-scoped users always raise tasks as one of their own
@@ -142,9 +153,32 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     }
   };
 
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setPdfError('Only PDF files can be attached here.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setPdfError('PDF is larger than 10 MB. Please attach a smaller file.');
+      return;
+    }
+    setPdfError(null);
+    setIsUploadingPdf(true);
+    try {
+      const url = await uploadDocumentToStorage(file);
+      if (url) setEvidencePdf(url);
+      else setPdfError('PDF upload failed. Check your connection and try again.');
+    } finally {
+      setIsUploadingPdf(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!desc.trim() || isSubmitting || isUploadingPhoto) return;
+    if (!desc.trim() || isSubmitting || isUploadingPhoto || isUploadingPdf) return;
 
     let normalizedRecurrence: Recurrence = 'One-Time';
     const recurrenceLower = recurrenceOption.toLowerCase();
@@ -163,11 +197,12 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       dept: effectiveBroadcast ? 'All Departments' : effectiveDept,
       desc,
       owner: effectiveBroadcast ? 'All Department Leads' : (owner || getDefaultAssignee(dept)),
-      deadline: targetDeadline || '2026-09-18',
+      deadline: targetDeadline || defaultDeadline(),
       evidence: 'Photo Proof',
       status: 'Pending',
       actionNotes: machineEqNo ? `M/C: ${machineEqNo}` : '',
       attachedPhoto: problemPhoto || undefined,
+      evidencePdf: evidencePdf || undefined,
       timestamp: new Date().toISOString(),
       originatorDept: effectiveBroadcast ? (lockedDepts?.[0] || 'Plant Head') : originatorDept,
       // New tasks are never Kaizen/DSI at creation — that's only offered
@@ -259,7 +294,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
               >
                 <option value="💡 General Kaizen (Continuous Improvement)">💡 General Kaizen (Continuous Improvement)</option>
                 <option value="🚨 Safety Directive / Hazard Containment">🚨 Safety Directive / Hazard Containment</option>
-                <option value="🔍 Internal / Customer Audit Finding">🔍 Internal / Customer Audit Finding</option>
+                <option value="🔍 Internal Quality Concern">🔍 Internal Quality Concern</option>
                 <option value="⚡ Line Breakdown / Equipment Abnormality">⚡ Line Breakdown / Equipment Abnormality</option>
                 <option value={MOM_TRIGGER}>{MOM_TRIGGER}</option>
                 <option value={CUSTOMER_MOM_TRIGGER}>{CUSTOMER_MOM_TRIGGER}</option>
@@ -483,7 +518,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
             {isUploadingPhoto && (
               <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Uploading photo to Drive…</span>
+                <span>Uploading photo…</span>
               </div>
             )}
 
@@ -498,6 +533,54 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                 <span>Photo attached — View on Drive</span>
               </a>
             )}
+          </div>
+
+          {/* Evidence PDF (Optional) */}
+          <div className="border border-slate-200 bg-white rounded-xl p-3.5 space-y-2.5 shadow-2xs">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+              <FileText className="w-4 h-4 text-blue-600" />
+              <span>Document (PDF - Optional)</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {isUploadingPdf ? (
+                <span className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Uploading PDF…
+                </span>
+              ) : evidencePdf ? (
+                <>
+                  <a
+                    href={evidencePdf}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>PDF attached — View</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setEvidencePdf('')}
+                    className="text-xs text-red-600 hover:underline font-medium ml-auto"
+                  >
+                    Remove PDF
+                  </button>
+                </>
+              ) : (
+                <label className="cursor-pointer bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 shadow-2xs transition-colors">
+                  <Upload className="w-4 h-4 text-slate-500" />
+                  <span>Attach PDF</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                    onChange={handlePdfUpload}
+                  />
+                </label>
+              )}
+              <span className="text-[10px] text-slate-400">e.g. customer complaint letter · max 10 MB</span>
+            </div>
+            {pdfError && <p className="text-[11px] font-semibold text-red-600">{pdfError}</p>}
           </div>
 
           {/* Modal Footer as per screenshot */}

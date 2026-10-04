@@ -60,6 +60,9 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   const [sortField, setSortField] = useState<keyof ActionItem>('id');
   const [sortAsc, setSortAsc] = useState<boolean>(false); // Default descending by ID matching #652 first
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all');
+  // Department-scoped users: narrow their list to the tasks shared with one
+  // other department (raised to it, or received from it).
+  const [relatedDept, setRelatedDept] = useState('');
 
   // Today's operational date
   const TODAY_STR = getTodayStr();
@@ -82,6 +85,8 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   // Filter actions
   const filteredActions = useMemo(() => {
     return actions.filter(item => {
+      if (relatedDept && item.dept !== relatedDept && item.originatorDept !== relatedDept) return false;
+
       // Quick filter
       if (activeQuickFilter === 'priority_a' && item.priority !== 'A') return false;
       if (activeQuickFilter === 'due_overdue') {
@@ -128,7 +133,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
 
       return true;
     });
-  }, [actions, filters, activeQuickFilter, TODAY_STR]);
+  }, [actions, filters, activeQuickFilter, TODAY_STR, relatedDept]);
 
   // Sort actions
   const sortedActions = useMemo(() => {
@@ -225,6 +230,27 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
               </>
             )}
           </div>
+
+          {/* Related department (dept-scoped users only) */}
+          {lockedDepts && (
+            <div className="relative min-w-[170px]">
+              <select
+                value={relatedDept}
+                onChange={(e) => {
+                  setRelatedDept(e.target.value);
+                  setCurrentPage(1);
+                }}
+                title="Show only tasks shared with this department"
+                className="w-full appearance-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-medium py-2 pl-3 pr-8 rounded-xl outline-none focus:border-blue-500 transition-colors cursor-pointer shadow-2xs"
+              >
+                <option value="">With any department</option>
+                {TASK_DEPARTMENTS.filter(d => !lockedDepts.includes(d)).map(d => (
+                  <option key={d} value={d}>With {d}</option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          )}
 
           {/* Assignees Select Dropdown matching "All Assignees (29)" */}
           <div className="relative min-w-[160px]">
@@ -400,7 +426,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             }`}
           >
             <Handshake className="w-3 h-3 text-teal-500" />
-            <span>Customer MOM</span>
+            <span>Customer Complaint / MOM</span>
           </button>
 
           {/* Closed */}
