@@ -30,6 +30,22 @@ import {
   Handshake
 } from 'lucide-react';
 
+// Whole days from `fromStr` to `toStr` (both 'YYYY-MM-DD'); negative when `toStr` is earlier.
+function daysBetween(fromStr: string, toStr: string): number {
+  const [fy, fm, fd] = fromStr.split('-').map(Number);
+  const [ty, tm, td] = toStr.split('-').map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// 'YYYY-MM-DD' -> '30 Sep' (falls back to the raw text if unparseable).
+function shortDate(dateStr: string): string {
+  const [y, m, d] = (dateStr || '').split('-').map(Number);
+  if (!y || !m || !d) return dateStr || '—';
+  return `${d} ${MONTHS[m - 1]}`;
+}
+
 interface ActionRegisterViewProps {
   actions: ActionItem[];
   filters: FilterState;
@@ -173,9 +189,9 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Search & Filters Card matching image.png */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-3.5">
-        {/* Row 1: Search Bar + Department Dropdown + Assignee Dropdown + View Switch + Create Task */}
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        {/* Row 1 (blue strip): Search Bar + Department Dropdown + Assignee Dropdown + Create Task */}
+        <div className="flex flex-wrap items-center gap-3 px-4 sm:px-5 py-3.5 bg-[#E6F1FB] border-b border-[#B5D4F4] border-l-4 border-l-[#185FA5]">
           {/* Main Search Input */}
           <div className="relative flex-1 min-w-[280px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -280,9 +296,9 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
           </button>
         </div>
 
-        {/* Row 2: Filter Pills matching image.png */}
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pt-1">
-          <span className="text-xs font-medium text-slate-500 whitespace-nowrap mr-1">
+        {/* Row 2 (violet strip): Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none px-4 sm:px-5 py-3 bg-[#EEEDFE] border-l-4 border-l-[#7F77DD]">
+          <span className="text-xs font-bold text-[#3C3489] whitespace-nowrap mr-1">
             Filters:
           </span>
 
@@ -447,19 +463,19 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
         </div>
       </div>
 
-      {/* Subheader Status Bar matching image.png */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-500">
+      {/* Status strip (teal) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-[#E1F5EE] border border-[#9FE1CB] border-l-4 border-l-[#1D9E75] text-xs text-[#085041]">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-slate-700">
+          <span className="font-bold text-[#04342C]">
             Showing {filteredActions.length} of {actions.length} tasks
           </span>
-          <span className="flex items-center gap-1.5 text-slate-500">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            <span>Register ID Range: #1 – #{actions.length}</span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1D9E75]"></span>
+            <span>Total in register: {actions.length}</span>
           </span>
         </div>
 
-        <div className="text-[11px] text-slate-500 italic">
+        <div className="text-[11px] italic text-[#0F6E56]">
           Due tasks show mild continuous blink • Click row to attach Before/After photos or convert to Kaizen
         </div>
       </div>
@@ -469,15 +485,15 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 select-none">
+              <tr className="bg-[#0C447C] text-[11px] font-bold uppercase tracking-wider text-[#E6F1FB] select-none">
                 {/* ID Column */}
                 <th
                   onClick={() => handleSort('id')}
-                  className="py-3 px-3.5 w-24 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  className="py-3 px-3.5 w-24 cursor-pointer hover:bg-[#185FA5] transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>ID</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3 h-3 text-blue-200" />
                   </div>
                 </th>
 
@@ -489,11 +505,11 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                 {/* Department Column */}
                 <th 
                   onClick={() => handleSort('dept')}
-                  className="py-3 px-3.5 w-32 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  className="py-3 px-3.5 w-32 cursor-pointer hover:bg-[#185FA5] transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>DEPT</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3 h-3 text-blue-200" />
                   </div>
                 </th>
 
@@ -505,33 +521,33 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                 {/* Assignee Column */}
                 <th 
                   onClick={() => handleSort('owner')}
-                  className="py-3 px-3.5 w-36 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  className="py-3 px-3.5 w-36 cursor-pointer hover:bg-[#185FA5] transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>ASSIGNEE</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3 h-3 text-blue-200" />
                   </div>
                 </th>
 
                 {/* Create Date Column */}
                 <th
                   onClick={() => handleSort('timestamp')}
-                  className="py-3 px-3.5 w-32 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  className="py-3 px-3.5 w-32 cursor-pointer hover:bg-[#185FA5] transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>CREATE DATE</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3 h-3 text-blue-200" />
                   </div>
                 </th>
 
                 {/* Due Date Column */}
                 <th 
                   onClick={() => handleSort('deadline')}
-                  className="py-3 px-3.5 w-36 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  className="py-3 px-3.5 w-36 cursor-pointer hover:bg-[#185FA5] transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>DUE DATE</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3 h-3 text-blue-200" />
                   </div>
                 </th>
 
@@ -555,27 +571,38 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                paginatedActions.map((item) => {
-                  const isDueToday = item.deadline === TODAY_STR && item.status !== 'Completed';
-                  const isOverdue = item.deadline < TODAY_STR && item.status !== 'Completed';
+                paginatedActions.map((item, rowIdx) => {
+                  const isDone = item.status === 'Completed';
+                  const daysLeft = item.deadline ? daysBetween(TODAY_STR, item.deadline) : null;
+                  const isOverdue = !isDone && daysLeft !== null && daysLeft < 0;
+                  const isDueToday = !isDone && daysLeft === 0;
+                  const isDueSoon = !isDone && daysLeft !== null && daysLeft > 0 && daysLeft <= 3;
+                  // Left edge colour: red overdue, amber due within 3 days, green completed, grey otherwise.
+                  const edgeClass = isDone
+                    ? 'border-l-[#639922]'
+                    : isOverdue
+                    ? 'border-l-[#E24B4A]'
+                    : isDueToday || isDueSoon
+                    ? 'border-l-[#EF9F27]'
+                    : 'border-l-[#B4B2A9]';
 
                   return (
                     <tr 
                       key={item.id}
                       onClick={() => onOpenDetail(item)}
-                      className="hover:bg-blue-50/40 cursor-pointer transition-colors group"
+                      className={`border-l-[3px] ${edgeClass} ${rowIdx % 2 === 1 ? 'bg-slate-50/80' : 'bg-white'} hover:bg-blue-50/60 cursor-pointer transition-colors group`}
                     >
                       {/* ID */}
-                      <td className="py-3.5 px-3.5 font-mono text-xs font-bold text-slate-800">
-                        #{item.id}
+                      <td className="py-3.5 px-3.5 font-mono text-xs font-bold text-blue-700 whitespace-nowrap">
+                        {item.id}
                       </td>
 
                       {/* PRI */}
                       <td className="py-3.5 px-2.5 text-center">
                         <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${
                           item.priority === 'A'
-                            ? 'bg-red-50 text-red-600 border border-red-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            ? 'bg-red-700 text-white border border-red-700'
+                            : 'bg-white text-blue-700 border border-blue-400'
                         }`}>
                           {item.priority}
                         </span>
@@ -625,24 +652,35 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
 
                       {/* CREATE DATE */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap font-mono text-xs text-slate-600">
-                        {isoToLocalDateStr(item.timestamp) || '—'}
+                        {shortDate(isoToLocalDateStr(item.timestamp))}
                       </td>
 
                       {/* DUE DATE */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
-                        {isDueToday ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 shadow-2xs">
-                            <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
-                            <span>{item.deadline} DUE</span>
-                          </span>
-                        ) : isOverdue ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                            <span>{item.deadline}</span>
-                          </span>
+                        {isOverdue ? (
+                          <div className="text-xs font-bold text-red-700 leading-tight">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
+                              {shortDate(item.deadline)}
+                            </div>
+                            <div className="text-[10px] font-semibold animate-pulse">{-daysLeft!} {daysLeft === -1 ? 'day' : 'days'} late</div>
+                          </div>
+                        ) : isDueToday ? (
+                          <div className="text-xs font-bold text-amber-700 leading-tight">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                              {shortDate(item.deadline)}
+                            </div>
+                            <div className="text-[10px] font-semibold">Due today</div>
+                          </div>
+                        ) : isDueSoon ? (
+                          <div className="text-xs font-bold text-amber-700 leading-tight">
+                            <div>{shortDate(item.deadline)}</div>
+                            <div className="text-[10px] font-semibold">in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</div>
+                          </div>
                         ) : (
-                          <span className="font-mono text-xs text-slate-600">
-                            {item.deadline}
+                          <span className="text-xs text-slate-600">
+                            {shortDate(item.deadline)}
                           </span>
                         )}
                       </td>
@@ -653,10 +691,12 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                           item.status === 'Completed'
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : item.status === 'In process'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
                             : item.status === 'Under Verification'
-                            ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : item.status === 'Hold'
+                            ? 'bg-red-50 text-red-700 border border-red-200'
+                            : 'bg-slate-100 text-slate-700 border border-slate-300'
                         }`}>
                           {item.status}
                         </span>
@@ -680,7 +720,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                             }`}
                             title={item.attachedPhoto ? 'Before photo attached' : 'Attach Before photo'}
                           >
-                            B
+                            {item.attachedPhoto ? <Check className="w-3.5 h-3.5" /> : 'B'}
                           </div>
 
                           {/* [ A ] After Box */}
@@ -692,7 +732,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                             }`}
                             title={item.afterPhoto ? 'After photo attached' : 'Attach After photo'}
                           >
-                            A
+                            {item.afterPhoto ? <Check className="w-3.5 h-3.5" /> : 'A'}
                           </div>
                         </div>
                       </td>

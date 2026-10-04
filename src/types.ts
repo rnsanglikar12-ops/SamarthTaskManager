@@ -26,6 +26,8 @@ export interface ActionItem {
   evidencePdf?: string;
   isKaizen?: boolean;
   kaizenBenefit?: string;
+  // Key from KAIZEN_CATEGORIES (sentinelDataLoader.ts), set when classified as DSI / Kaizen.
+  kaizenCategory?: string;
   isBroadcast?: boolean;
   category?: string;
   isMOM?: boolean;

@@ -399,7 +399,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Row 2: Navigation Tabs — desktop/tablet only, horizontal scroll if needed */}
-      <div className="hidden sm:flex w-full px-4 sm:px-6 lg:px-8 py-1.5 items-center gap-1.5 overflow-x-auto scrollbar-none">
+      <div className="hidden sm:flex w-full px-4 sm:px-6 lg:px-8 py-1.5 items-center gap-1.5 overflow-x-auto scrollbar-none bg-slate-100 border-y border-slate-200">
         {navTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -408,13 +408,13 @@ export const Header: React.FC<HeaderProps> = ({
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-600 hover:text-slate-900 hover:bg-white'
               }`}
             >
               <Icon className="w-3.5 h-3.5 text-slate-500" />
               <span>{tab.label}</span>
               {tab.badge && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-slate-100 text-slate-600'}`}>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-white text-slate-600 border border-slate-200'}`}>
                   {tab.badge}
                 </span>
               )}

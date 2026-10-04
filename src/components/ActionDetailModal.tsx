@@ -21,7 +21,7 @@ import {
   FileText
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
-import { isRaisedToOtherDept, isCustomerMOM, CUSTOMER_MOM_CATEGORY } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, isCustomerMOM, CUSTOMER_MOM_CATEGORY, KAIZEN_CATEGORIES } from '../data/sentinelDataLoader';
 
 function recurringSinceLabel(action: ActionItem): string | null {
   if (action.recurrence === 'One-Time') return null;
@@ -64,6 +64,19 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isKaizen, setIsKaizen] = useState<boolean>(action.isKaizen || false);
   const [kaizenBenefit, setKaizenBenefit] = useState<string>(action.kaizenBenefit || '');
+  const [kaizenCategory, setKaizenCategory] = useState<string>(action.kaizenCategory || '');
+  const [kaizenError, setKaizenError] = useState<string | null>(null);
+
+  // A task classified as DSI / Kaizen must say which kind, so the Kaizen
+  // hub's category filters can find it.
+  const kaizenCategoryMissing = (): boolean => {
+    if (isKaizen && !kaizenCategory) {
+      setKaizenError('Select a DSI / Kaizen category before saving.');
+      return true;
+    }
+    setKaizenError(null);
+    return false;
+  };
   const [isCustomerMom, setIsCustomerMom] = useState<boolean>(isCustomerMOM(action));
   // Unticking only clears the Customer MOM tag, never some other category.
   const category = isCustomerMom
@@ -134,7 +147,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   };
 
   const handleSave = async () => {
-    if (isBusy) return;
+    if (isBusy || kaizenCategoryMissing()) return;
     setPendingAction('save');
     const ok = await onSave({
       ...action,
@@ -147,6 +160,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       afterPhoto: afterPhoto || undefined,
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      kaizenCategory: isKaizen ? kaizenCategory : undefined,
       evidencePdf: evidencePdf || undefined,
       category
     });
@@ -156,7 +170,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
   // Standard task completion (for non-handshake tasks, or originator sign-off)
   const handleMarkResolved = async () => {
-    if (isBusy) return;
+    if (isBusy || kaizenCategoryMissing()) return;
     setPendingAction('resolve');
     const todayStr = new Date().toLocaleDateString('en-GB');
     const stamp = isHandshake
@@ -174,6 +188,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       afterPhoto: afterPhoto || undefined,
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      kaizenCategory: isKaizen ? kaizenCategory : undefined,
       evidencePdf: evidencePdf || undefined,
       category
     });
@@ -183,7 +198,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
   // Handshake: Target Department submits work for Originator Verification
   const handleSubmitForVerification = async () => {
-    if (isBusy) return;
+    if (isBusy || kaizenCategoryMissing()) return;
     setPendingAction('verify');
     const todayStr = new Date().toLocaleDateString('en-GB');
     const stamp = `[Work submitted for Originator Verification by ${action.dept} on ${todayStr}]`;
@@ -199,6 +214,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       afterPhoto: afterPhoto || undefined,
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      kaizenCategory: isKaizen ? kaizenCategory : undefined,
       evidencePdf: evidencePdf || undefined,
       category
     });
@@ -212,7 +228,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       setHandshakeNotice('Please provide specific feedback/reason for rework.');
       return;
     }
-    if (isBusy) return;
+    if (isBusy || kaizenCategoryMissing()) return;
     setPendingAction('rework');
 
     const todayStr = new Date().toLocaleDateString('en-GB');
@@ -229,6 +245,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       afterPhoto: afterPhoto || undefined,
       isKaizen,
       kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      kaizenCategory: isKaizen ? kaizenCategory : undefined,
       evidencePdf: evidencePdf || undefined,
       category
     });
@@ -344,7 +361,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         <div className="p-5 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 font-mono font-bold text-xs flex items-center justify-center shadow-2xs">
-              #{action.id}
+              {action.id}
             </span>
             <div>
               <div className="flex items-center gap-2">
@@ -535,11 +552,11 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             <div className="p-4 bg-red-50 border-2 border-red-300 rounded-xl space-y-3 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center gap-2 text-red-900 font-bold text-sm">
                 <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-                <span>Confirm Permanent Deletion of Task #{action.id}</span>
+                <span>Confirm Permanent Deletion of Task {action.id}</span>
               </div>
               <div className="text-xs text-red-800 space-y-1.5">
                 <p>
-                  Authorized executive action. This will permanently remove Task #{action.id} from the master operational register.
+                  Authorized executive action. This will permanently remove Task {action.id} from the master operational register.
                 </p>
                 <div className="p-2.5 bg-white/80 rounded-lg border border-red-200 font-medium text-slate-800">
                   <span className="text-slate-500 font-semibold block text-[10px] uppercase">Task Description:</span>
@@ -851,13 +868,27 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             )}
 
             {isKaizen && (
-              <input
-                type="text"
-                value={kaizenBenefit}
-                onChange={(e) => setKaizenBenefit(e.target.value)}
-                placeholder="Document tangible benefit: Cost reduction, safety enhancement, cycle time saving..."
-                className="w-full py-2 px-3 bg-white border border-emerald-300 rounded-lg text-xs text-slate-800 focus:outline-none"
-              />
+              <>
+                <select
+                  value={kaizenCategory}
+                  onChange={(e) => { setKaizenCategory(e.target.value); setKaizenError(null); }}
+                  disabled={!canEditTask}
+                  className={`w-full py-2 px-3 bg-white border rounded-lg text-xs font-semibold text-slate-800 focus:outline-none disabled:bg-slate-100 ${kaizenError ? 'border-red-400' : 'border-emerald-300'}`}
+                >
+                  <option value="">Select DSI / Kaizen category…</option>
+                  {KAIZEN_CATEGORIES.map(c => (
+                    <option key={c.key} value={c.key}>{c.icon} {c.label}</option>
+                  ))}
+                </select>
+                {kaizenError && <p className="text-[11px] font-semibold text-red-600">{kaizenError}</p>}
+                <input
+                  type="text"
+                  value={kaizenBenefit}
+                  onChange={(e) => setKaizenBenefit(e.target.value)}
+                  placeholder="Document tangible benefit: Cost reduction, safety enhancement, cycle time saving..."
+                  className="w-full py-2 px-3 bg-white border border-emerald-300 rounded-lg text-xs text-slate-800 focus:outline-none"
+                />
+              </>
             )}
           </div>
         </div>

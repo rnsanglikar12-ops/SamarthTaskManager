@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActionItem } from '../types';
+import { kaizenCategoryLabel } from '../data/sentinelDataLoader';
 import { X, Printer, Sparkles, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 interface OnePointSheetModalProps {
@@ -135,6 +136,9 @@ export const OnePointSheetModal: React.FC<OnePointSheetModalProps> = ({
               <div className="p-2 border-r border-slate-300 border-t font-semibold">{action.owner}</div>
               <div className="p-2 bg-slate-50 font-bold border-r border-slate-300 border-t">Verification Status</div>
               <div className="p-2 border-t font-bold text-emerald-700">{action.status}</div>
+
+              <div className="p-2 bg-slate-50 font-bold border-r border-slate-300 border-t">Kaizen Category</div>
+              <div className="p-2 border-t font-semibold sm:col-span-3">{kaizenCategoryLabel(action.kaizenCategory) || 'Not categorised'}</div>
             </div>
 
             {/* 5W1H Abnormality Description */}

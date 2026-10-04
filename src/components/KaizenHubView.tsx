@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { OnePointSheetModal } from './OnePointSheetModal';
 import { SAMARTH_ORG_STRUCTURE } from '../data/orgStructure';
-import { isRaisedToOtherDept, isKaizenAction, getTodayStr } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, isKaizenAction, getTodayStr, KAIZEN_CATEGORIES } from '../data/sentinelDataLoader';
 
 interface KaizenHubViewProps {
   actions: ActionItem[];
@@ -103,26 +103,8 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
       // Champion / Owner
       if (selectedChampion && !item.owner.toLowerCase().includes(selectedChampion.toLowerCase())) return false;
 
-      // Category Pill
-      if (activeCategory === 'dsi') {
-        const isDsi = item.desc.toLowerCase().includes('dsi') || (item.id % 2 === 0);
-        if (!isDsi) return false;
-      } else if (activeCategory === 'pokayoke') {
-        const isPoka = item.desc.toLowerCase().includes('pokayoke') || item.desc.toLowerCase().includes('error');
-        if (!isPoka) return false;
-      } else if (activeCategory === '5s') {
-        const is5S = item.desc.toLowerCase().includes('5s') || item.desc.toLowerCase().includes('cleaning') || item.desc.toLowerCase().includes('line');
-        if (!is5S) return false;
-      } else if (activeCategory === 'standard') {
-        const isStd = !item.desc.toLowerCase().includes('dsi') && item.isKaizen;
-        if (!isStd) return false;
-      } else if (activeCategory === 'quality') {
-        const isQ = item.dept.toLowerCase().includes('quality') || item.desc.toLowerCase().includes('defect') || item.desc.toLowerCase().includes('quality');
-        if (!isQ) return false;
-      } else if (activeCategory === 'productivity') {
-        const isP = item.desc.toLowerCase().includes('time') || item.desc.toLowerCase().includes('speed') || item.desc.toLowerCase().includes('material');
-        if (!isP) return false;
-      }
+      // Category pill — the category chosen when the task was classified as a Kaizen
+      if (activeCategory !== 'all' && item.kaizenCategory !== activeCategory) return false;
 
       return true;
     }).sort((a, b) => {
@@ -138,6 +120,13 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
   }, [kaizenActions, searchQuery, selectedDept, selectedChampion, activeCategory, sortField, sortAsc]);
 
   const totalCount = kaizenActions.length;
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    kaizenActions.forEach(k => {
+      if (k.kaizenCategory) counts[k.kaizenCategory] = (counts[k.kaizenCategory] || 0) + 1;
+    });
+    return counts;
+  }, [kaizenActions]);
   const completedCount = kaizenActions.filter(k => k.status === 'Completed').length;
 
   const toggleSort = (field: 'id' | 'dept' | 'deadline') => {
@@ -241,71 +230,19 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
             All DSI & Kaizens ({totalCount})
           </button>
 
-          <button
-            onClick={() => setActiveCategory('dsi')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-              activeCategory === 'dsi'
-                ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            ✨ DSI (Small Improvements)
-          </button>
-
-          <button
-            onClick={() => setActiveCategory('pokayoke')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-              activeCategory === 'pokayoke'
-                ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            🛡️ Poka-Yoke (Error Proof)
-          </button>
-
-          <button
-            onClick={() => setActiveCategory('5s')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-              activeCategory === '5s'
-                ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            🧹 5S Standards
-          </button>
-
-          <button
-            onClick={() => setActiveCategory('standard')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-              activeCategory === 'standard'
-                ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            💡 Standard Kaizen
-          </button>
-
-          <button
-            onClick={() => setActiveCategory('quality')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-              activeCategory === 'quality'
-                ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            🎯 Quality (Zero Defect)
-          </button>
-
-          <button
-            onClick={() => setActiveCategory('productivity')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-              activeCategory === 'productivity'
-                ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            ⚡ Productivity / Time
-          </button>
+          {KAIZEN_CATEGORIES.map(c => (
+            <button
+              key={c.key}
+              onClick={() => setActiveCategory(c.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
+                activeCategory === c.key
+                  ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {c.icon} {c.label} ({categoryCounts[c.key] ?? 0})
+            </button>
+          ))}
         </div>
       </div>
 
@@ -382,7 +319,7 @@ export const KaizenHubView: React.FC<KaizenHubViewProps> = ({
                     >
                       {/* ID */}
                       <td className="py-3 px-3 font-mono font-bold text-slate-900 text-xs">
-                        #{item.id}
+                        {item.id}
                       </td>
 
                       {/* TYPE */}

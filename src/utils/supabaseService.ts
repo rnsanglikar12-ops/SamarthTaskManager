@@ -116,6 +116,7 @@ interface TaskRow {
   evidence_pdf?: string | null;
   is_kaizen: boolean;
   kaizen_benefit: string | null;
+  kaizen_category?: string | null;
   is_broadcast: boolean;
   category: string | null;
   is_mom: boolean;
@@ -146,6 +147,7 @@ function rowToActionItem(row: TaskRow): ActionItem {
     evidencePdf: row.evidence_pdf || undefined,
     isKaizen: row.is_kaizen,
     kaizenBenefit: row.kaizen_benefit || undefined,
+    kaizenCategory: row.kaizen_category || undefined,
     isBroadcast: row.is_broadcast,
     category: row.category || undefined,
     isMOM: row.is_mom,
@@ -176,6 +178,7 @@ function actionToRow(action: Omit<ActionItem, 'id'> & { id?: string }): Omit<Tas
     evidence_pdf: action.evidencePdf || null,
     is_kaizen: Boolean(action.isKaizen),
     kaizen_benefit: action.kaizenBenefit || null,
+    kaizen_category: action.kaizenCategory || null,
     is_broadcast: Boolean(action.isBroadcast),
     category: action.category || null,
     is_mom: Boolean(action.isMOM),

@@ -94,3 +94,19 @@ export const CUSTOMER_MOM_CATEGORY = 'Customer MOM';
 export function isCustomerMOM(action: Pick<ActionItem, 'category'>): boolean {
   return action.category === CUSTOMER_MOM_CATEGORY;
 }
+
+// DSI / Kaizen categories, chosen when a completed task is classified as a
+// Kaizen. The key is what's stored in tasks.kaizen_category.
+export const KAIZEN_CATEGORIES = [
+  { key: 'dsi', label: 'DSI (Small Improvements)', icon: '✨' },
+  { key: 'pokayoke', label: 'Poka-Yoke (Error Proof)', icon: '🛡️' },
+  { key: '5s', label: '5S Standards', icon: '🧹' },
+  { key: 'standard', label: 'Standard Kaizen', icon: '💡' },
+  { key: 'quality', label: 'Quality (Zero Defect)', icon: '🎯' },
+  { key: 'productivity', label: 'Productivity / Time', icon: '⚡' }
+] as const;
+
+export function kaizenCategoryLabel(key?: string): string {
+  const c = KAIZEN_CATEGORIES.find(k => k.key === key);
+  return c ? `${c.icon} ${c.label}` : '';
+}
