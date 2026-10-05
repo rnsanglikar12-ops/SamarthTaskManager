@@ -185,7 +185,8 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     if (recurrenceLower.includes('daily')) normalizedRecurrence = 'Daily';
     else if (recurrenceLower.includes('monthly')) normalizedRecurrence = 'Monthly';
     else if (recurrenceLower.includes('quarterly')) normalizedRecurrence = 'Quarterly';
-    else if (recurrenceLower.includes('weekly') || recurrenceLower.includes('pm')) normalizedRecurrence = 'Weekly';
+    else if (recurrenceLower.includes('yearly')) normalizedRecurrence = 'Yearly';
+    else if (recurrenceLower.includes('weekly')) normalizedRecurrence = 'Weekly';
 
     const effectiveBroadcast = isBroadcast;
     const effectiveDept = dept;
