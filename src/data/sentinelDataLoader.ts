@@ -55,6 +55,38 @@ export function isKaizenAction(a: ActionItem): boolean {
   return a.isKaizen;
 }
 
+// A recurring task's next occurrence is opened the moment the previous one
+// is completed. Until its deadline arrives nobody can be expected to have
+// done it, so the health / compliance figures below leave it out. Overdue
+// and completed occurrences still count.
+export function isUpcomingRecurring(a: ActionItem, today: string): boolean {
+  return a.recurrence !== 'One-Time' && a.status !== 'Completed' && !!a.deadline && a.deadline > today;
+}
+
+export interface IndexScore {
+  completed: number;
+  counted: number;
+  rate: number; // whole percent; 0 when nothing is counted
+}
+
+function score(list: ActionItem[]): IndexScore {
+  const completed = list.filter(a => a.status === 'Completed').length;
+  const counted = list.length;
+  return { completed, counted, rate: counted > 0 ? Math.round((completed / counted) * 100) : 0 };
+}
+
+// Plant / Dept Health Index and the Dept Leaders compliance %: completed ÷
+// all tasks, minus recurring occurrences that aren't due yet.
+export function healthIndex(actions: ActionItem[], today: string): IndexScore {
+  return score(actions.filter(a => !isUpcomingRecurring(a, today)));
+}
+
+// Recurring Health Index: of the recurring occurrences that have come due,
+// how many were completed.
+export function recurringIndex(actions: ActionItem[], today: string): IndexScore {
+  return score(actions.filter(a => a.recurrence !== 'One-Time' && !isUpcomingRecurring(a, today)));
+}
+
 const STORAGE_KEY = 'samarth_industries_matrix_v4';
 
 // Tasks live entirely in the connected Google Sheet — this is only an

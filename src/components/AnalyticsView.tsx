@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { ActionItem } from '../types';
 import { TASK_DEPARTMENTS } from '../data/orgStructure';
+import { getTodayStr, healthIndex, recurringIndex } from '../data/sentinelDataLoader';
 import { 
   TrendingUp, 
   CheckCircle2, 
@@ -143,9 +144,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   }, [actions]);
 
   const totalActions = actions.length;
-  const completedActions = actions.filter(a => a.status === 'Completed').length;
   const priorityACount = actions.filter(a => a.priority === 'A').length;
-  const overallRate = totalActions > 0 ? Math.round((completedActions / totalActions) * 100) : 0;
+  const today = getTodayStr();
+  const health = healthIndex(actions, today);
+  const routine = recurringIndex(actions, today);
 
   return (
     <div className="space-y-6">
@@ -164,13 +166,26 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-4 bg-[#0f172a] px-4 py-2.5 rounded-xl border border-[#334155]">
-            <div className="text-right">
-              <span className="text-[10px] text-[#94a3b8] uppercase font-semibold block">{scopeDept ? 'Dept Health Index' : 'Plant Health Index'}</span>
-              <span className="text-2xl font-extrabold font-heading text-[#22c55e]">{overallRate}%</span>
+          <div className="flex flex-wrap items-stretch gap-3">
+            <div className="flex items-center gap-4 bg-[#0f172a] px-4 py-2.5 rounded-xl border border-[#334155]">
+              <div className="text-right">
+                <span className="text-[10px] text-[#94a3b8] uppercase font-semibold block">{scopeDept ? 'Dept Health Index' : 'Plant Health Index'}</span>
+                <span className="text-2xl font-extrabold font-heading text-[#22c55e]">{health.rate}%</span>
+                <span className="text-[10px] text-[#94a3b8] font-mono block">{health.completed} of {health.counted}</span>
+              </div>
+              <div className="w-12 h-12 rounded-full border-4 border-[#334155] flex items-center justify-center relative">
+                <span className="text-xs font-bold text-[#f8fafc] font-mono">{health.rate}%</span>
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-full border-4 border-[#334155] flex items-center justify-center relative">
-              <span className="text-xs font-bold text-[#f8fafc] font-mono">{overallRate}%</span>
+            <div className="flex items-center gap-4 bg-[#0f172a] px-4 py-2.5 rounded-xl border border-[#334155]">
+              <div className="text-right">
+                <span className="text-[10px] text-[#94a3b8] uppercase font-semibold block">Recurring Health Index</span>
+                <span className="text-2xl font-extrabold font-heading text-[#38bdf8]">{routine.counted > 0 ? `${routine.rate}%` : '—'}</span>
+                <span className="text-[10px] text-[#94a3b8] font-mono block">{routine.completed} of {routine.counted} due</span>
+              </div>
+              <div className="w-12 h-12 rounded-full border-4 border-[#334155] flex items-center justify-center relative">
+                <span className="text-xs font-bold text-[#f8fafc] font-mono">{routine.counted > 0 ? `${routine.rate}%` : '—'}</span>
+              </div>
             </div>
           </div>
         </div>

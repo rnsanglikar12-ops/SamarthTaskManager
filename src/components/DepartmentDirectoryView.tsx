@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { SAMARTH_ORG_STRUCTURE, MENTOR_NAME } from '../data/orgStructure';
-import { getTodayStr, isoToLocalDateStr } from '../data/sentinelDataLoader';
+import { getTodayStr, isoToLocalDateStr, healthIndex, recurringIndex } from '../data/sentinelDataLoader';
 import { ActionItem } from '../types';
 import {
   Building2,
@@ -153,18 +153,26 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
     : '0.0';
   const netVelocityBalance = closedVelocityTasks - totalVelocityTasks;
 
-  // Leadership compliance ranking benchmarked against 80% target
+  // Leadership compliance ranking benchmarked against 80% target — same rule
+  // as the Cockpit's health index (upcoming recurring occurrences left out),
+  // plus each department's Recurring Health Index.
   const complianceRanking = useMemo(() => {
+    const byDept: Record<string, ActionItem[]> = {};
+    actions.forEach(a => {
+      const d = a.dept || 'General';
+      (byDept[d] ||= []).push(a);
+    });
     return departmentsList.map(dept => {
-      const stats = deptStats[dept.deptName] || { total: 0, completed: 0, overdue: 0 };
-      const rate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+      const list = byDept[dept.deptName] || [];
+      const health = healthIndex(list, todayStr);
       return {
         ...dept,
-        stats,
-        rate
+        health,
+        routine: recurringIndex(list, todayStr),
+        rate: health.rate
       };
     }).sort((a, b) => b.rate - a.rate);
-  }, [departmentsList, deptStats]);
+  }, [departmentsList, actions, todayStr]);
 
   const maxWeeklyVal = Math.max(...weeklyVelocity.flatMap(w => [w.generated, w.closed]), 1);
 
@@ -414,7 +422,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                   <span>Department Leadership Compliance Ranking (%)</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Leader task completion rate benchmarked against 80% target
+                  Leader task completion rate against an 80% target; recurring tasks not yet due are left out
                 </p>
               </div>
               <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
@@ -458,8 +466,16 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                           {dept.rate}%
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          ({dept.stats.completed}/{dept.stats.total})
+                          ({dept.health.completed}/{dept.health.counted})
                         </span>
+                        {dept.routine.counted > 0 && (
+                          <span
+                            title="Recurring Health Index: recurring tasks completed of those that have come due"
+                            className="text-[10px] font-mono font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded"
+                          >
+                            Recurring {dept.routine.rate}% ({dept.routine.completed}/{dept.routine.counted})
+                          </span>
+                        )}
                       </div>
                     </div>
 
