@@ -202,7 +202,8 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       deadline: targetDeadline || defaultDeadline(),
       evidence: 'Photo Proof',
       status: 'Pending',
-      actionNotes: machineEqNo ? `M/C: ${machineEqNo}` : '',
+      // The countermeasure box starts empty; the machine lives in machineNote.
+      actionNotes: '',
       attachedPhoto: problemPhoto || undefined,
       evidencePdf: evidencePdf || undefined,
       timestamp: new Date().toISOString(),

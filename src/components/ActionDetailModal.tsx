@@ -648,6 +648,9 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             </label>
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 font-medium text-slate-900 text-sm leading-relaxed">
               {action.desc.replace(/⭐\s*\[DSI Kaizen\]/i, '').trim()}
+              {action.machineNote && (
+                <span className="block mt-1.5 text-[11px] font-mono font-normal text-slate-500">M/C: {action.machineNote}</span>
+              )}
             </div>
           </div>
 
