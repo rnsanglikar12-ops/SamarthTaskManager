@@ -21,7 +21,7 @@ import {
   FileText
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
-import { isRaisedToOtherDept, customerTagOf, CustomerTag, CUSTOMER_COMPLAINT_CATEGORY, CUSTOMER_MOM_CATEGORY, KAIZEN_CATEGORIES } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, getTodayStr, customerTagOf, CustomerTag, CUSTOMER_COMPLAINT_CATEGORY, CUSTOMER_MOM_CATEGORY, KAIZEN_CATEGORIES } from '../data/sentinelDataLoader';
 
 function recurringSinceLabel(action: ActionItem): string | null {
   if (action.recurrence === 'One-Time') return null;
@@ -100,6 +100,23 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     setNotesError(null);
     return false;
   };
+  // Closing a recurring task before its due date opens the next occurrence
+  // straight away. People mistook that for a fault and kept closing the new
+  // one too, so ask first and say exactly what will happen.
+  const [earlyClose, setEarlyClose] = useState<null | { proceed: () => void }>(null);
+  const isEarlyRecurringClose = (): boolean =>
+    action.recurrence !== 'One-Time' && !!deadline && deadline > getTodayStr();
+  const fmtDay = (iso: string) =>
+    new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const nextDueDate = (): string => {
+    const d = new Date(`${deadline}T12:00:00`);
+    if (action.recurrence === 'Daily') d.setDate(d.getDate() + 1);
+    else if (action.recurrence === 'Weekly') d.setDate(d.getDate() + 7);
+    else if (action.recurrence === 'Monthly') d.setMonth(d.getMonth() + 1);
+    else if (action.recurrence === 'Quarterly') d.setMonth(d.getMonth() + 3);
+    else if (action.recurrence === 'Yearly') d.setFullYear(d.getFullYear() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
   const [customerTag, setCustomerTag] = useState<CustomerTag | null>(customerTagOf(action));
   // Clearing the tag only clears a customer tag, never some other category.
   const category = customerTag
@@ -168,11 +185,16 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     if (ok) onClose();
   };
 
-  const handleSave = async () => {
+  const handleSave = async (confirmedEarly = false) => {
     if (isBusy || kaizenCategoryMissing()) return;
     // Only when this save moves the task into a closing status, so editing an
     // already-closed legacy task without notes isn't blocked.
     if (status !== action.status && countermeasureMissing(status)) return;
+    if (!confirmedEarly && status === 'Completed' && action.status !== 'Completed' && isEarlyRecurringClose()) {
+      setEarlyClose({ proceed: () => handleSave(true) });
+      return;
+    }
+    setEarlyClose(null);
     setPendingAction('save');
     const ok = await onSave({
       ...action,
@@ -194,8 +216,13 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   };
 
   // Standard task completion (for non-handshake tasks, or originator sign-off)
-  const handleMarkResolved = async () => {
+  const handleMarkResolved = async (confirmedEarly = false) => {
     if (isBusy || kaizenCategoryMissing() || countermeasureMissing('Completed')) return;
+    if (!confirmedEarly && isEarlyRecurringClose()) {
+      setEarlyClose({ proceed: () => handleMarkResolved(true) });
+      return;
+    }
+    setEarlyClose(null);
     setPendingAction('resolve');
     const todayStr = new Date().toLocaleDateString('en-GB');
     const stamp = isHandshake
@@ -498,7 +525,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                         <div className="flex flex-wrap items-center gap-2 pt-1">
                           <button
                             type="button"
-                            onClick={handleMarkResolved}
+                            onClick={() => handleMarkResolved()}
                             disabled={isBusy}
                             className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-2xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                           >
@@ -930,6 +957,38 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
           </div>
         </div>
 
+        {earlyClose && (
+          <div className="mx-4 mb-3 p-4 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-3 animate-in fade-in duration-150">
+            <div className="flex items-start gap-2 text-amber-900">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-sm">This {action.recurrence} task is not due until {fmtDay(deadline)}</p>
+                <p className="text-xs">
+                  Closing it now will <b>immediately open the next {action.recurrence.toLowerCase()} task, due {fmtDay(nextDueDate())}</b>.
+                  That new task is expected, not a fault. Close only if this occurrence's work is really done.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => earlyClose.proceed()}
+                disabled={isBusy}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60"
+              >
+                Yes, work is done. Close it
+              </button>
+              <button
+                type="button"
+                onClick={() => setEarlyClose(null)}
+                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Modal Footer with Strict Role Gating (Requirement 1 & 4) */}
         <div className="p-4 border-t border-slate-200 bg-slate-50/80 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -940,7 +999,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                 status !== 'Completed' && (
                   <button
                     type="button"
-                    onClick={handleMarkResolved}
+                    onClick={() => handleMarkResolved()}
                     disabled={isBusy}
                     className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
@@ -986,7 +1045,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
               status !== 'Completed' && (
                 <button
                   type="button"
-                  onClick={handleMarkResolved}
+                  onClick={() => handleMarkResolved()}
                   disabled={isBusy}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -1027,7 +1086,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             {canEditTask && (
               <button
                 type="button"
-                onClick={handleSave}
+                onClick={() => handleSave()}
                 disabled={isBusy}
                 className="flex items-center gap-1.5 px-4 py-2 bg-[#1d64ec] hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
