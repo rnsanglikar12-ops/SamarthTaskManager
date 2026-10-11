@@ -119,12 +119,23 @@ export function saveActionsToStorage(actions: ActionItem[]): void {
   }
 }
 
-// Customer MOM action points are tagged through the tasks table's existing
-// free-text `category` column rather than a dedicated boolean flag.
+// Customer complaints and customer MOM (meeting) action points are tagged
+// through the tasks table's existing free-text `category` column rather than
+// dedicated boolean flags. A task carries at most one of the two.
+export const CUSTOMER_COMPLAINT_CATEGORY = 'Customer Complaint';
 export const CUSTOMER_MOM_CATEGORY = 'Customer MOM';
+export type CustomerTag = typeof CUSTOMER_COMPLAINT_CATEGORY | typeof CUSTOMER_MOM_CATEGORY;
+
+export function isCustomerComplaint(action: Pick<ActionItem, 'category'>): boolean {
+  return action.category === CUSTOMER_COMPLAINT_CATEGORY;
+}
 
 export function isCustomerMOM(action: Pick<ActionItem, 'category'>): boolean {
   return action.category === CUSTOMER_MOM_CATEGORY;
+}
+
+export function customerTagOf(action: Pick<ActionItem, 'category'>): CustomerTag | null {
+  return isCustomerComplaint(action) ? CUSTOMER_COMPLAINT_CATEGORY : isCustomerMOM(action) ? CUSTOMER_MOM_CATEGORY : null;
 }
 
 // DSI / Kaizen categories, chosen when a completed task is classified as a

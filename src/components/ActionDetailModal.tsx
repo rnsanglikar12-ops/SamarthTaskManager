@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ActionItem, ActionStatus, Priority } from '../types';
 import {
   X,
@@ -21,7 +21,7 @@ import {
   FileText
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
-import { isRaisedToOtherDept, isCustomerMOM, CUSTOMER_MOM_CATEGORY, KAIZEN_CATEGORIES } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, customerTagOf, CustomerTag, CUSTOMER_COMPLAINT_CATEGORY, CUSTOMER_MOM_CATEGORY, KAIZEN_CATEGORIES } from '../data/sentinelDataLoader';
 
 function recurringSinceLabel(action: ActionItem): string | null {
   if (action.recurrence === 'One-Time') return null;
@@ -77,11 +77,26 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     setKaizenError(null);
     return false;
   };
-  const [isCustomerMom, setIsCustomerMom] = useState<boolean>(isCustomerMOM(action));
-  // Unticking only clears the Customer MOM tag, never some other category.
-  const category = isCustomerMom
-    ? CUSTOMER_MOM_CATEGORY
-    : (isCustomerMOM(action) ? undefined : action.category);
+  // A task can't be closed (Completed) or handed over for verification
+  // until someone has written what was done. The automatic "[Resolved on …]"
+  // style stamps don't count as an action.
+  const [notesError, setNotesError] = useState<string | null>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const countermeasureMissing = (targetStatus: ActionStatus): boolean => {
+    const closing = targetStatus === 'Completed' || targetStatus === 'Under Verification';
+    const written = actionNotes.replace(/\[[^\]]*\]/g, '').replace(/\|/g, '').trim();
+    if (closing && !written) {
+      setNotesError('Enter the action / countermeasure taken before closing this task.');
+      notesRef.current?.focus();
+      return true;
+    }
+    setNotesError(null);
+    return false;
+  };
+  const [customerTag, setCustomerTag] = useState<CustomerTag | null>(customerTagOf(action));
+  // Clearing the tag only clears a customer tag, never some other category.
+  const category = customerTag
+    ?? (customerTagOf(action) ? undefined : action.category);
 
   // Target Deadline revision state (Authority strictly with Plant Head / Secret Master)
   const [deadline, setDeadline] = useState<string>(action.deadline || '');
@@ -148,6 +163,9 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
   const handleSave = async () => {
     if (isBusy || kaizenCategoryMissing()) return;
+    // Only when this save moves the task into a closing status, so editing an
+    // already-closed legacy task without notes isn't blocked.
+    if (status !== action.status && countermeasureMissing(status)) return;
     setPendingAction('save');
     const ok = await onSave({
       ...action,
@@ -170,7 +188,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
   // Standard task completion (for non-handshake tasks, or originator sign-off)
   const handleMarkResolved = async () => {
-    if (isBusy || kaizenCategoryMissing()) return;
+    if (isBusy || kaizenCategoryMissing() || countermeasureMissing('Completed')) return;
     setPendingAction('resolve');
     const todayStr = new Date().toLocaleDateString('en-GB');
     const stamp = isHandshake
@@ -198,7 +216,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
   // Handshake: Target Department submits work for Originator Verification
   const handleSubmitForVerification = async () => {
-    if (isBusy || kaizenCategoryMissing()) return;
+    if (isBusy || kaizenCategoryMissing() || countermeasureMissing('Under Verification')) return;
     setPendingAction('verify');
     const todayStr = new Date().toLocaleDateString('en-GB');
     const stamp = `[Work submitted for Originator Verification by ${action.dept} on ${todayStr}]`;
@@ -814,34 +832,46 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
           {/* Action Notes / Countermeasures */}
           <div>
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              Action Notes, Countermeasures & Root Cause
+              Action Notes, Countermeasures & Root Cause <span className="text-red-500 normal-case tracking-normal">* required to close</span>
             </label>
             <textarea
+              ref={notesRef}
               rows={3}
               value={actionNotes}
-              onChange={(e) => setActionNotes(e.target.value)}
+              onChange={(e) => { setActionNotes(e.target.value); if (notesError) setNotesError(null); }}
               placeholder="Record immediate containment, machine adjustment, root cause or supplier verification..."
               disabled={!canEditTask}
-              className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 outline-none shadow-2xs disabled:bg-slate-100 disabled:text-slate-400"
+              className={`w-full p-3 bg-white border ${notesError ? 'border-red-400' : 'border-slate-200'} rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 outline-none shadow-2xs disabled:bg-slate-100 disabled:text-slate-400`}
             />
+            {notesError && <p className="mt-1 text-[11px] font-semibold text-red-600">{notesError}</p>}
           </div>
 
-          {/* Customer MOM tag — lists the task under the Master Matrix's
-              Customer MOM filter. */}
-          <div className="p-3.5 bg-teal-50/50 border border-teal-200 rounded-xl">
-            <label className={`flex items-center gap-2 ${canEditTask ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-              <input
-                type="checkbox"
-                checked={isCustomerMom}
-                onChange={(e) => setIsCustomerMom(e.target.checked)}
-                disabled={!canEditTask}
-                className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4 disabled:opacity-50"
-              />
-              <span className={`font-bold text-xs flex items-center gap-1.5 ${canEditTask ? 'text-teal-800' : 'text-slate-400'}`}>
-                <Handshake className={`w-3.5 h-3.5 ${canEditTask ? 'text-teal-600' : 'text-slate-400'}`} />
-                <span>Customer Complaint / MOM</span>
-              </span>
-            </label>
+          {/* Customer tag — lists the task under the Master Matrix's Customer
+              Complaint or Customer MOM filter. Tap the selected one again to
+              clear it. */}
+          <div className="p-3.5 bg-teal-50/50 border border-teal-200 rounded-xl space-y-2">
+            <span className={`font-bold text-xs flex items-center gap-1.5 ${canEditTask ? 'text-teal-800' : 'text-slate-400'}`}>
+              <Handshake className={`w-3.5 h-3.5 ${canEditTask ? 'text-teal-600' : 'text-slate-400'}`} />
+              <span>Customer tag</span>
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {([
+                [CUSTOMER_COMPLAINT_CATEGORY, 'bg-rose-600 border-rose-600'],
+                [CUSTOMER_MOM_CATEGORY, 'bg-teal-600 border-teal-600'],
+              ] as const).map(([tag, activeCls]) => (
+                <button
+                  key={tag}
+                  type="button"
+                  disabled={!canEditTask}
+                  onClick={() => setCustomerTag(customerTag === tag ? null : tag)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    customerTag === tag ? `${activeCls} text-white` : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Convert to Kaizen Toggle — only checkable once the task is actually

@@ -4,7 +4,7 @@ import {
   FilterState, 
   ActionStatus 
 } from '../types';
-import { isRaisedToOtherDept, getTodayStr, isoToLocalDateStr, isCustomerMOM } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, getTodayStr, isoToLocalDateStr, isCustomerMOM, isCustomerComplaint } from '../data/sentinelDataLoader';
 import { TASK_DEPARTMENTS, combineAllAssignees } from '../data/orgStructure';
 import { Supervisor } from '../utils/dataService';
 import { 
@@ -27,7 +27,8 @@ import {
   Image as ImageIcon,
   Flame,
   Lock,
-  Handshake
+  Handshake,
+  MessageSquareWarning
 } from 'lucide-react';
 
 // Whole days from `fromStr` to `toStr` (both 'YYYY-MM-DD'); negative when `toStr` is earlier.
@@ -58,7 +59,7 @@ interface ActionRegisterViewProps {
   supervisors?: Supervisor[];
 }
 
-type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'customer_mom' | 'pending' | 'closed';
+type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'customer_complaint' | 'customer_mom' | 'pending' | 'closed';
 
 export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   actions,
@@ -113,6 +114,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
       if (activeQuickFilter === 'broadcast' && !item.isBroadcast) return false;
       if (activeQuickFilter === 'recurring' && item.recurrence === 'One-Time') return false;
       if (activeQuickFilter === 'verification' && item.status !== 'Under Verification') return false;
+      if (activeQuickFilter === 'customer_complaint' && !isCustomerComplaint(item)) return false;
       if (activeQuickFilter === 'customer_mom' && !isCustomerMOM(item)) return false;
       if (activeQuickFilter === 'pending' && item.status !== 'Pending') return false;
       if (activeQuickFilter === 'closed' && item.status !== 'Completed') return false;
@@ -429,6 +431,22 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             <span>Verification</span>
           </button>
 
+          {/* Customer Complaint */}
+          <button
+            onClick={() => {
+              setActiveQuickFilter(activeQuickFilter === 'customer_complaint' ? 'all' : 'customer_complaint');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
+              activeQuickFilter === 'customer_complaint'
+                ? 'bg-rose-600 text-white shadow-2xs'
+                : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <MessageSquareWarning className="w-3 h-3 text-rose-500" />
+            <span>Customer Complaint</span>
+          </button>
+
           {/* Customer MOM */}
           <button
             onClick={() => {
@@ -442,7 +460,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             }`}
           >
             <Handshake className="w-3 h-3 text-teal-500" />
-            <span>Customer Complaint / MOM</span>
+            <span>Customer MOM</span>
           </button>
 
           {/* Closed */}

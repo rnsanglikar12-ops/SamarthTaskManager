@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ActionItem, Priority, Recurrence } from '../types';
 import { TASK_DEPARTMENTS, combineAssigneesForDept, getDefaultAssignee } from '../data/orgStructure';
 import { Supervisor } from '../utils/dataService';
-import { CUSTOMER_MOM_CATEGORY } from '../data/sentinelDataLoader';
+import { CUSTOMER_COMPLAINT_CATEGORY, CUSTOMER_MOM_CATEGORY } from '../data/sentinelDataLoader';
 import { uploadPhotoToGoogleSheet, uploadDocumentToStorage } from '../utils/dataService';
 import { compressImage } from '../utils/imageUtils';
 import {
@@ -31,7 +31,8 @@ interface NewActionModalProps {
 }
 
 const MOM_TRIGGER = '📋 Saturday MOM Operational Action';
-const CUSTOMER_MOM_TRIGGER = '🤝 Customer Complaint / MOM';
+const CUSTOMER_COMPLAINT_TRIGGER = '🚨 Customer Complaint';
+const CUSTOMER_MOM_TRIGGER = '🤝 Customer MOM';
 
 // Default target date for a new task: three days from today (local date).
 function defaultDeadline(): string {
@@ -213,7 +214,9 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       isKaizen: false,
       isBroadcast,
       isMOM: originTrigger === MOM_TRIGGER,
-      category: originTrigger === CUSTOMER_MOM_TRIGGER ? CUSTOMER_MOM_CATEGORY : undefined,
+      category: originTrigger === CUSTOMER_COMPLAINT_TRIGGER ? CUSTOMER_COMPLAINT_CATEGORY
+        : originTrigger === CUSTOMER_MOM_TRIGGER ? CUSTOMER_MOM_CATEGORY
+        : undefined,
       machineNote: machineEqNo || undefined
     });
     setIsSubmitting(false);
@@ -298,6 +301,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                 <option value="🔍 Internal Quality Concern">🔍 Internal Quality Concern</option>
                 <option value="⚡ Line Breakdown / Equipment Abnormality">⚡ Line Breakdown / Equipment Abnormality</option>
                 <option value={MOM_TRIGGER}>{MOM_TRIGGER}</option>
+                <option value={CUSTOMER_COMPLAINT_TRIGGER}>{CUSTOMER_COMPLAINT_TRIGGER}</option>
                 <option value={CUSTOMER_MOM_TRIGGER}>{CUSTOMER_MOM_TRIGGER}</option>
                 <option value="🤝 CFT Handshake Resolution">🤝 CFT Handshake Resolution</option>
                 <option value="📊 DWM Daily Work Management">📊 DWM Daily Work Management</option>
