@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   MapPin,
   RefreshCw,
@@ -66,6 +66,17 @@ const TAB_ACTIVE_CLASSES: Record<TabColor, string> = {
   amber: 'bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs',
   purple: 'bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs',
   emerald: 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs'
+};
+
+// One-line description per task-type tab, shown as a tooltip (the registers
+// no longer carry a title card, to leave room for the task table).
+const TAB_HINTS: Partial<Record<NavTab, string>> = {
+  saturday_mom: 'Minutes of Meeting action points reviewed weekly with Mr. Sanglikar & Department Heads',
+  customer_complaint: 'Quality issues reported by customers, tracked to a verified countermeasure',
+  customer_mom: 'Action points agreed in customer meetings and reviews',
+  recurring_pm: 'Cyclic routines, machine calibrations and maintenance checks',
+  cft_handshake: 'Tasks raised by one department to another (Originator Dept ≠ Target Dept)',
+  broadcast: 'Instructions sent to every department at once; each department tracks its own copy',
 };
 
 // Desktop tab strip sits on a dark band so it stands out from the page and
@@ -140,6 +151,19 @@ export const Header: React.FC<HeaderProps> = ({
       setIsRefreshing(false);
     }
   };
+
+  // Publish the header's live height (it grows when the tab bar wraps) so
+  // screens can pin their own toolbars just below it.
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const publish = () => document.documentElement.style.setProperty('--app-header-h', `${el.offsetHeight}px`);
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const navTabs: { id: NavTab; label: string; icon: React.ElementType; badge: string; color: TabColor }[] = [
     { id: 'cockpit', label: 'Cockpit', icon: LayoutGrid, badge: overdueCount > 0 ? String(overdueCount) : '', color: 'blue' },
@@ -228,7 +252,7 @@ export const Header: React.FC<HeaderProps> = ({
   );
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-slate-200/90 shadow-sm select-none">
+    <header ref={headerRef} className="sticky top-0 z-40 bg-white border-b border-slate-200/90 shadow-sm select-none">
       {/* iOS standalone PWA: the status bar is translucent and the page draws
           underneath it (viewport-fit=cover), so reserve the notch/status-bar
           height here. Zero-height in a normal browser tab. */}
@@ -253,9 +277,6 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Badges & Location Subtitle */}
           <div className="hidden sm:flex flex-col justify-center">
             <div className="flex items-center gap-2">
-              <span className="border border-slate-300 bg-white text-slate-700 font-mono text-[9.5px] font-bold px-2 py-0.5 rounded tracking-wider shadow-2xs">
-                SAMARTH
-              </span>
               <span className="border border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-medium px-2 py-0.5 rounded flex items-center gap-1.5 shadow-2xs">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -424,6 +445,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              title={TAB_HINTS[tab.id]}
               className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                 isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
