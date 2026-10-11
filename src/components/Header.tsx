@@ -62,6 +62,10 @@ const TAB_ACTIVE_CLASSES: Record<TabColor, string> = {
   emerald: 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs'
 };
 
+// Desktop tab strip sits on a dark band so it stands out from the page and
+// is easy to point at when showing new users around ("the dark bar").
+const TAB_STRIP_BG = 'bg-[#0C447C] border-[#0C447C]';
+
 const TAB_BADGE_CLASSES: Record<TabColor, string> = {
   blue: 'bg-blue-100 text-blue-700',
   amber: 'bg-amber-100 text-amber-800',
@@ -399,7 +403,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Row 2: Navigation Tabs — desktop/tablet only, horizontal scroll if needed */}
-      <div className="hidden sm:flex w-full px-4 sm:px-6 lg:px-8 py-1.5 items-center gap-1.5 overflow-x-auto scrollbar-none bg-slate-100 border-y border-slate-200">
+      <div className={`hidden sm:flex w-full px-4 sm:px-6 lg:px-8 py-1.5 items-center gap-1.5 overflow-x-auto scrollbar-none ${TAB_STRIP_BG} border-y`}>
         {navTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -408,13 +412,13 @@ export const Header: React.FC<HeaderProps> = ({
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+                isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Icon className="w-3.5 h-3.5 text-slate-500" />
+              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-500' : 'text-slate-400'}`} />
               <span>{tab.label}</span>
               {tab.badge && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-white text-slate-600 border border-slate-200'}`}>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-amber-400 text-[#0B1E33] shadow-xs'}`}>
                   {tab.badge}
                 </span>
               )}
