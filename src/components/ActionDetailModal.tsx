@@ -79,12 +79,19 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   };
   // A task can't be closed (Completed) or handed over for verification
   // until someone has written what was done. The automatic "[Resolved on …]"
-  // style stamps don't count as an action.
+  // style stamps and the "M/C: <machine>" line every new task starts with
+  // don't count as an action.
   const [notesError, setNotesError] = useState<string | null>(null);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const countermeasureMissing = (targetStatus: ActionStatus): boolean => {
     const closing = targetStatus === 'Completed' || targetStatus === 'Under Verification';
-    const written = actionNotes.replace(/\[[^\]]*\]/g, '').replace(/\|/g, '').trim();
+    const machineLine = action.machineNote ? `M/C: ${action.machineNote}` : null;
+    const written = actionNotes
+      .replace(/\[[^\]]*\]/g, '')
+      .split('|')
+      .map(part => part.trim())
+      .filter(part => part && part !== machineLine && !/^M\/C:\s*\S*$/.test(part))
+      .join(' ');
     if (closing && !written) {
       setNotesError('Enter the action / countermeasure taken before closing this task.');
       notesRef.current?.focus();
