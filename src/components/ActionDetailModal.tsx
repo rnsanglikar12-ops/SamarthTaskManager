@@ -44,6 +44,14 @@ interface ActionDetailModalProps {
   session: AuthUser | null;
 }
 
+// Quick headings above the countermeasure box. Each tap adds the heading on a
+// new line; "Why" numbers itself (Why 1 … Why 5) to build a why-why chain
+// that ends in the root cause.
+const NOTE_HEADINGS = ['Containment', 'Root cause', 'Countermeasure', 'Verified by'] as const;
+const MAX_WHYS = 5;
+// A line that is only a heading ("Why 2:", "Root cause:") isn't an action.
+const HEADING_ONLY_LINE = /^(Containment|Root cause|Countermeasure|Verified by|Why \d+)\s*:\s*$/i;
+
 export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   action,
   onClose,
@@ -88,9 +96,9 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     const machineLine = action.machineNote ? `M/C: ${action.machineNote}` : null;
     const written = actionNotes
       .replace(/\[[^\]]*\]/g, '')
-      .split('|')
+      .split(/\||\n/)
       .map(part => part.trim())
-      .filter(part => part && part !== machineLine && !/^M\/C:\s*\S*$/.test(part))
+      .filter(part => part && part !== machineLine && !/^M\/C:\s*\S*$/.test(part) && !HEADING_ONLY_LINE.test(part))
       .join(' ');
     if (closing && !written) {
       setNotesError('Enter the action / countermeasure taken before closing this task.');
@@ -100,6 +108,22 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     setNotesError(null);
     return false;
   };
+  const whyCount = (actionNotes.match(/^Why \d+\s*:/gim) || []).length;
+  // Adds "<heading>: " on a new line at the end and puts the cursor after it.
+  const addHeading = (heading: string) => {
+    const base = actionNotes.replace(/\s+$/, '');
+    const next = `${base}${base ? '\n' : ''}${heading}: `;
+    setActionNotes(next);
+    if (notesError) setNotesError(null);
+    requestAnimationFrame(() => {
+      const el = notesRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(next.length, next.length);
+      el.scrollTop = el.scrollHeight;
+    });
+  };
+
   // Closing a recurring task before its due date opens the next occurrence
   // straight away. People mistook that for a fault and kept closing the new
   // one too, so ask first and say exactly what will happen.
@@ -871,9 +895,32 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
               Action Notes, Countermeasures & Root Cause <span className="text-red-500 normal-case tracking-normal">* required to close</span>
             </label>
+            {canEditTask && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {[
+                  NOTE_HEADINGS[0],
+                  whyCount < MAX_WHYS ? `Why ${whyCount + 1}` : null,
+                  ...NOTE_HEADINGS.slice(1),
+                ].filter((h): h is string => !!h).map(h => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => addHeading(h)}
+                    disabled={isBusy}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors disabled:opacity-50 ${
+                      h.startsWith('Why')
+                        ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    + {h}
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea
               ref={notesRef}
-              rows={3}
+              rows={actionNotes.split('\n').length > 2 ? 7 : 3}
               value={actionNotes}
               onChange={(e) => { setActionNotes(e.target.value); if (notesError) setNotesError(null); }}
               placeholder="Record immediate containment, machine adjustment, root cause or supplier verification..."
