@@ -27,7 +27,8 @@ interface NewActionModalProps {
   onAdd: (newItem: Omit<ActionItem, 'id'>) => Promise<boolean>;
   lockedDepts?: string[] | null;
   supervisors?: Supervisor[];
-  defaultIsMOM?: boolean;
+  // Which kind of task to start as, from the tab the user is on.
+  defaultKind?: 'saturday_mom' | 'customer_complaint' | 'customer_mom' | 'broadcast';
 }
 
 const MOM_TRIGGER = '📋 Saturday MOM Operational Action';
@@ -47,7 +48,7 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   onAdd,
   lockedDepts = null,
   supervisors = [],
-  defaultIsMOM = false
+  defaultKind
 }) => {
   if (!isOpen) return null;
 
@@ -61,9 +62,12 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [desc, setDesc] = useState('');
   const [originTrigger, setOriginTrigger] = useState(
-    defaultIsMOM ? MOM_TRIGGER : '💡 General Kaizen (Continuous Improvement)'
+    defaultKind === 'saturday_mom' ? MOM_TRIGGER
+      : defaultKind === 'customer_complaint' ? CUSTOMER_COMPLAINT_TRIGGER
+      : defaultKind === 'customer_mom' ? CUSTOMER_MOM_TRIGGER
+      : '💡 General Kaizen (Continuous Improvement)'
   );
-  const [isBroadcast, setIsBroadcast] = useState(false);
+  const [isBroadcast, setIsBroadcast] = useState(defaultKind === 'broadcast');
   const [priority, setPriority] = useState<Priority>('B');
   const [recurrenceOption, setRecurrenceOption] = useState<string>('One-Time Action');
   const [machineEqNo, setMachineEqNo] = useState('PDC-02');

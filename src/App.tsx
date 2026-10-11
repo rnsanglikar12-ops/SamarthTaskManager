@@ -5,7 +5,9 @@ import {
   saveActionsToStorage,
   isRaisedToOtherDept,
   isKaizenAction,
-  getTodayStr
+  getTodayStr,
+  isCustomerComplaint,
+  isCustomerMOM
 } from './data/sentinelDataLoader';
 import {
   subscribeToTabBroadcast,
@@ -46,7 +48,7 @@ import {
 import { exportActionsToCsv, ExportRow } from './utils/exportUtils';
 import { archivePhotoToDrive, runWithConcurrency } from './utils/driveArchive';
 import { AuthUser, can, isDeptInScope, getSession, setSession as persistSession, clearSession } from './utils/auth';
-import { CheckCircle2, Calendar, RotateCw, Users, Crown, Lock } from 'lucide-react';
+import { CheckCircle2, Calendar, RotateCw, Users, Crown, Lock, MessageSquareWarning, Handshake, Radio } from 'lucide-react';
 
 function computeStats(list: ActionItem[]): SentinelStats {
   let completed = 0;
@@ -640,6 +642,9 @@ export default function App() {
   // Specific filtered lists for dedicated tabs — all scoped to visibleActions
   const momActions = useMemo(() => visibleActions.filter(a => a.isMOM), [visibleActions]);
   const recurringActions = useMemo(() => visibleActions.filter(a => a.recurrence !== 'One-Time'), [visibleActions]);
+  const complaintActions = useMemo(() => visibleActions.filter(isCustomerComplaint), [visibleActions]);
+  const customerMomActions = useMemo(() => visibleActions.filter(isCustomerMOM), [visibleActions]);
+  const broadcastActions = useMemo(() => visibleActions.filter(a => a.isBroadcast), [visibleActions]);
   // CFT Handshake: strictly tasks raised to another department only (originatorDept != dept)
   const cftActions = useMemo(() => visibleActions.filter(a => isRaisedToOtherDept(a.originatorDept, a.dept)), [visibleActions]);
 
@@ -665,6 +670,9 @@ export default function App() {
         completedCount={stats.completed}
         cftCount={cftActions.length}
         momCount={momActions.length}
+        complaintCount={complaintActions.length}
+        customerMomCount={customerMomActions.length}
+        broadcastCount={broadcastActions.length}
         recurringCount={recurringActions.length}
         kaizenCount={stats.kaizenCount}
         overdueCount={stats.overdueCount}
@@ -810,6 +818,56 @@ export default function App() {
           </div>
         )}
 
+        {/* Customer Complaint / Customer MOM / Broadcast tabs — same register
+            and status filters as the other task-type tabs */}
+        {(['customer_complaint', 'customer_mom', 'broadcast'] as const).map(tab => {
+          if (activeTab !== tab) return null;
+          const cfg = {
+            customer_complaint: { list: complaintActions, Icon: MessageSquareWarning, tone: 'rose', title: 'Customer Complaint Register', unit: 'Complaints', blurb: 'Quality issues reported by customers, tracked to a verified countermeasure.', add: '+ Add Customer Complaint' },
+            customer_mom: { list: customerMomActions, Icon: Handshake, tone: 'teal', title: 'Customer MOM Action Register', unit: 'Actions', blurb: 'Action points agreed in customer meetings and reviews.', add: '+ Add Customer MOM Action' },
+            broadcast: { list: broadcastActions, Icon: Radio, tone: 'sky', title: 'Broadcast Register (Plant-Wide)', unit: 'Broadcasts', blurb: 'Instructions sent to every department at once; each department tracks its own copy.', add: '+ New Broadcast' },
+          }[tab];
+          const tones: Record<string, { border: string; icon: string; badge: string }> = {
+            rose: { border: 'border-rose-200/80', icon: 'text-rose-600', badge: 'bg-rose-100 text-rose-700' },
+            teal: { border: 'border-teal-200/80', icon: 'text-teal-600', badge: 'bg-teal-100 text-teal-700' },
+            sky: { border: 'border-sky-200/80', icon: 'text-sky-600', badge: 'bg-sky-100 text-sky-700' },
+          };
+          const t = tones[cfg.tone];
+          return (
+            <div key={tab} className="space-y-4">
+              <div className={`bg-white rounded-2xl border ${t.border} p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-3`}>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <cfg.Icon className={`w-4 h-4 ${t.icon}`} />
+                    <h2 className="font-bold text-base text-slate-900">{cfg.title}</h2>
+                    <span className={`${t.badge} text-xs font-bold px-2.5 py-0.5 rounded-full`}>
+                      {cfg.list.length} {cfg.unit}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">{cfg.blurb}</p>
+                </div>
+                <button
+                  onClick={() => setIsNewModalOpen(true)}
+                  className="bg-[#1d64ec] hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl"
+                >
+                  {cfg.add}
+                </button>
+              </div>
+              <ActionRegisterView
+                actions={cfg.list}
+                filters={filters}
+                setFilters={setGuardedFilters}
+                onOpenDetail={(action) => setSelectedAction(action)}
+                onUpdateStatus={handleUpdateStatus}
+                onOpenNewModal={() => setIsNewModalOpen(true)}
+                onDelete={handleDeleteAction}
+                lockedDepts={lockedDepts}
+                supervisors={supervisors}
+              />
+            </div>
+          );
+        })}
+
         {/* Recurring PM Tab */}
         {activeTab === 'recurring_pm' && (
           <div className="space-y-4">
@@ -933,7 +991,7 @@ export default function App() {
           onAdd={handleAddAction}
           lockedDepts={lockedDepts}
           supervisors={supervisors}
-          defaultIsMOM={activeTab === 'saturday_mom'}
+          defaultKind={activeTab === 'saturday_mom' || activeTab === 'customer_complaint' || activeTab === 'customer_mom' || activeTab === 'broadcast' ? activeTab : undefined}
         />
       )}
 

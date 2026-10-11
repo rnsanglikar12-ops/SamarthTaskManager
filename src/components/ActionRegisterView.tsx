@@ -4,31 +4,24 @@ import {
   FilterState, 
   ActionStatus 
 } from '../types';
-import { isRaisedToOtherDept, getTodayStr, isoToLocalDateStr, isCustomerMOM, isCustomerComplaint } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, getTodayStr, isoToLocalDateStr } from '../data/sentinelDataLoader';
 import { TASK_DEPARTMENTS, combineAllAssignees } from '../data/orgStructure';
 import { Supervisor } from '../utils/dataService';
-import { 
-  Search, 
-  Sparkles, 
-  AlertTriangle, 
-  Clock, 
-  ChevronLeft, 
-  ChevronRight, 
-  X, 
-  Eye, 
+import {
+  Search,
+  AlertTriangle,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Eye,
   ArrowUpDown,
   Plus,
   RefreshCw,
-  Radio,
   CheckCircle2,
   Check,
   ChevronDown,
-  Camera,
-  Image as ImageIcon,
-  Flame,
-  Lock,
-  Handshake,
-  MessageSquareWarning
+  Lock
 } from 'lucide-react';
 
 // Whole days from `fromStr` to `toStr` (both 'YYYY-MM-DD'); negative when `toStr` is earlier.
@@ -59,7 +52,10 @@ interface ActionRegisterViewProps {
   supervisors?: Supervisor[];
 }
 
-type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'kaizen' | 'broadcast' | 'recurring' | 'verification' | 'customer_complaint' | 'customer_mom' | 'pending' | 'closed';
+// Task types (Customer Complaint, Customer MOM, Broadcast, Recurring, Kaizen)
+// have their own main tabs, so these pills are status/urgency filters that
+// work the same inside every tab.
+type QuickFilter = 'all' | 'priority_a' | 'due_overdue' | 'verification' | 'pending' | 'closed';
 
 export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   actions,
@@ -110,12 +106,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
         const isDueOrOverdue = (item.deadline <= TODAY_STR) && item.status !== 'Completed';
         if (!isDueOrOverdue) return false;
       }
-      if (activeQuickFilter === 'kaizen' && !item.isKaizen) return false;
-      if (activeQuickFilter === 'broadcast' && !item.isBroadcast) return false;
-      if (activeQuickFilter === 'recurring' && item.recurrence === 'One-Time') return false;
       if (activeQuickFilter === 'verification' && item.status !== 'Under Verification') return false;
-      if (activeQuickFilter === 'customer_complaint' && !isCustomerComplaint(item)) return false;
-      if (activeQuickFilter === 'customer_mom' && !isCustomerMOM(item)) return false;
       if (activeQuickFilter === 'pending' && item.status !== 'Pending') return false;
       if (activeQuickFilter === 'closed' && item.status !== 'Completed') return false;
 
@@ -351,54 +342,6 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             <span>Due / Overdue</span>
           </button>
 
-          {/* DSI / Kaizen */}
-          <button
-            onClick={() => {
-              setActiveQuickFilter(activeQuickFilter === 'kaizen' ? 'all' : 'kaizen');
-              setCurrentPage(1);
-            }}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
-              activeQuickFilter === 'kaizen'
-                ? 'bg-emerald-600 text-white shadow-2xs'
-                : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Sparkles className="w-3 h-3 text-emerald-500" />
-            <span>DSI / Kaizen</span>
-          </button>
-
-          {/* Broadcasts */}
-          <button
-            onClick={() => {
-              setActiveQuickFilter(activeQuickFilter === 'broadcast' ? 'all' : 'broadcast');
-              setCurrentPage(1);
-            }}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
-              activeQuickFilter === 'broadcast'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Radio className="w-3 h-3 text-blue-500" />
-            <span>Broadcasts</span>
-          </button>
-
-          {/* Recurring PM */}
-          <button
-            onClick={() => {
-              setActiveQuickFilter(activeQuickFilter === 'recurring' ? 'all' : 'recurring');
-              setCurrentPage(1);
-            }}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
-              activeQuickFilter === 'recurring'
-                ? 'bg-amber-500 text-white shadow-2xs'
-                : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <RefreshCw className="w-3 h-3 text-amber-600" />
-            <span>Recurring PM</span>
-          </button>
-
           {/* Pending */}
           <button
             onClick={() => {
@@ -429,38 +372,6 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
           >
             <Eye className="w-3 h-3 text-purple-500" />
             <span>Verification</span>
-          </button>
-
-          {/* Customer Complaint */}
-          <button
-            onClick={() => {
-              setActiveQuickFilter(activeQuickFilter === 'customer_complaint' ? 'all' : 'customer_complaint');
-              setCurrentPage(1);
-            }}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
-              activeQuickFilter === 'customer_complaint'
-                ? 'bg-rose-600 text-white shadow-2xs'
-                : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <MessageSquareWarning className="w-3 h-3 text-rose-500" />
-            <span>Customer Complaint</span>
-          </button>
-
-          {/* Customer MOM */}
-          <button
-            onClick={() => {
-              setActiveQuickFilter(activeQuickFilter === 'customer_mom' ? 'all' : 'customer_mom');
-              setCurrentPage(1);
-            }}
-            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
-              activeQuickFilter === 'customer_mom'
-                ? 'bg-teal-600 text-white shadow-2xs'
-                : 'bg-white border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Handshake className="w-3 h-3 text-teal-500" />
-            <span>Customer MOM</span>
           </button>
 
           {/* Closed */}

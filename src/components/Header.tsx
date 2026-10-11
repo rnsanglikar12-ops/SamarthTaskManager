@@ -20,13 +20,16 @@ import {
   Menu,
   X,
   Download,
-  Trash2
+  Trash2,
+  MessageSquareWarning,
+  Handshake,
+  Radio
 } from 'lucide-react';
 import { isGoogleSheetConnected } from '../utils/dataService';
 import { AuthUser, can } from '../utils/auth';
 import { TASK_DEPARTMENTS } from '../data/orgStructure';
 
-export type NavTab = 'cockpit' | 'matrix' | 'saturday_mom' | 'recurring_pm' | 'cft_handshake' | 'kaizen' | 'dept_leaders';
+export type NavTab = 'cockpit' | 'matrix' | 'saturday_mom' | 'customer_complaint' | 'customer_mom' | 'recurring_pm' | 'cft_handshake' | 'broadcast' | 'kaizen' | 'dept_leaders';
 
 interface HeaderProps {
   activeTab: NavTab;
@@ -48,6 +51,9 @@ interface HeaderProps {
   lockedDepts?: string[] | null;
   cftCount?: number;
   momCount?: number;
+  complaintCount?: number;
+  customerMomCount?: number;
+  broadcastCount?: number;
   recurringCount?: number;
   kaizenCount?: number;
   overdueCount?: number;
@@ -93,6 +99,9 @@ export const Header: React.FC<HeaderProps> = ({
   lockedDepts = null,
   cftCount,
   momCount = 0,
+  complaintCount = 0,
+  customerMomCount = 0,
+  broadcastCount = 0,
   recurringCount = 0,
   kaizenCount = 0,
   overdueCount = 0
@@ -133,13 +142,16 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const navTabs: { id: NavTab; label: string; icon: React.ElementType; badge: string; color: TabColor }[] = [
-    { id: 'cockpit', label: 'Cockpit', icon: LayoutGrid, badge: overdueCount > 0 ? `${overdueCount} alert` : '', color: 'blue' },
+    { id: 'cockpit', label: 'Cockpit', icon: LayoutGrid, badge: overdueCount > 0 ? String(overdueCount) : '', color: 'blue' },
     { id: 'matrix', label: 'Master Matrix', icon: SlidersHorizontal, badge: String(totalCount), color: 'blue' },
     { id: 'saturday_mom', label: 'Saturday MOM', icon: Calendar, badge: String(momCount), color: 'blue' },
+    { id: 'customer_complaint', label: 'Customer Complaint', icon: MessageSquareWarning, badge: String(complaintCount), color: 'blue' },
+    { id: 'customer_mom', label: 'Customer MOM', icon: Handshake, badge: String(customerMomCount), color: 'blue' },
     { id: 'recurring_pm', label: 'Recurring PM', icon: RotateCw, badge: String(recurringCount), color: 'amber' },
     { id: 'cft_handshake', label: 'CFT Handshake', icon: Users, badge: String(cftCount ?? 0), color: 'purple' },
+    { id: 'broadcast', label: 'Broadcast', icon: Radio, badge: String(broadcastCount), color: 'blue' },
     { id: 'kaizen', label: 'Kaizen / DSI', icon: Sparkles, badge: String(kaizenCount), color: 'emerald' },
-    { id: 'dept_leaders', label: 'Dept Leaders & 4-V', icon: UserCheck, badge: '', color: 'blue' }
+    { id: 'dept_leaders', label: 'Dept Leaders', icon: UserCheck, badge: '', color: 'blue' }
   ];
 
   const accountMenuItems = (closeMenu: () => void) => (
@@ -402,8 +414,9 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Row 2: Navigation Tabs — desktop/tablet only, horizontal scroll if needed */}
-      <div className={`hidden sm:flex w-full px-4 sm:px-6 lg:px-8 py-1.5 items-center gap-1.5 overflow-x-auto scrollbar-none ${TAB_STRIP_BG} border-y`}>
+      {/* Row 2: Navigation Tabs — desktop/tablet only. Ten tabs: icons show only
+          on wide screens and the row wraps rather than hiding tabs off-screen. */}
+      <div className={`hidden sm:flex flex-wrap w-full px-4 lg:px-6 py-1.5 items-center gap-1 ${TAB_STRIP_BG} border-y`}>
         {navTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -411,14 +424,14 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                 isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-500' : 'text-slate-400'}`} />
+              <Icon className={`hidden min-[1800px]:block w-3.5 h-3.5 ${isActive ? 'text-slate-500' : 'text-slate-400'}`} />
               <span>{tab.label}</span>
               {tab.badge && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-amber-400 text-[#0B1E33] shadow-xs'}`}>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-amber-400 text-[#0B1E33] shadow-xs'}`}>
                   {tab.badge}
                 </span>
               )}
