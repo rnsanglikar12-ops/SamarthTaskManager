@@ -178,22 +178,28 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
 
   return (
     <div className="space-y-5">
-      {/* Header Banner matching Screenshot 3 */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-2xs">
-            <Users className="w-5 h-5" />
+      {/* Header Banner — frozen just below the app header (title, search and
+          view switch stay in view while the charts scroll) */}
+      <div
+        className="sm:sticky z-30 bg-white rounded-2xl border border-slate-200/90 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+        // The page-coloured shadow above fills the gap under the app header so
+        // scrolled charts don't peek through.
+        style={{ top: 'calc(var(--app-header-h, 0px) + 6px)', boxShadow: '0 -6px 0 0 #f8fafc, 0 1px 3px rgba(15, 23, 42, 0.08)' }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-2xs">
+            <Users className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h2 className="text-lg font-bold text-slate-900 leading-snug">
+              <h2 className="text-base font-bold text-slate-900 leading-snug">
                 Department Leadership Scorecards & Graphical Roster
               </h2>
               <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-blue-200">
                 {departmentsList.length} Departments Active
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="hidden md:block text-xs text-slate-500">
               Visual compliance analytics, workload breakdown charts, and supervisor accountability metrics
             </p>
           </div>
@@ -410,12 +416,13 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
         </div>
       )}
 
-      {/* SECTION 2: Two Columns Grid (Compliance Ranking vs Workload Breakdown) */}
+      {/* SECTION 2: Compliance Ranking (vertical bars) and Workload Breakdown */}
       {(activeViewTab === 'graphical' || activeViewTab === 'split') && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Left Column: Department Leadership Compliance Ranking (%) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+        <div className="space-y-5">
+          {/* Department Leadership Compliance Ranking (%) — one vertical bar per
+              department, best first, all visible without scrolling */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Award className="w-4 h-4 text-emerald-600" />
@@ -425,79 +432,76 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                   Leader task completion rate against an 80% target; recurring tasks not yet due are left out
                 </p>
               </div>
-              <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
-                Target: 80%
-              </span>
+              <div className="flex items-center gap-3 text-[11px] text-slate-600">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />≥ 80%</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-500" />51–79%</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" />≤ 50%</span>
+                <span className="flex items-center gap-1"><span className="w-4 border-t-2 border-dashed border-red-400" />Target 80%</span>
+                <span className="flex items-center gap-1"><span className="px-1 rounded bg-sky-50 border border-sky-200 text-sky-700 font-mono font-semibold">R</span>Recurring %</span>
+              </div>
             </div>
 
-            <div className="space-y-3 pt-2 max-h-[480px] overflow-y-auto pr-1">
-              {complianceRanking.map((dept, idx) => {
-                const meetsTarget = dept.rate >= 80;
-                const isLocked = !!lockedDepts && !lockedDepts.includes(dept.deptName);
-                return (
-                  <div
-                    key={dept.deptName}
-                    onClick={isLocked ? undefined : () => onSelectDepartment(dept.deptName)}
-                    title={isLocked ? `Access restricted. You are locked to: ${lockedDepts!.join(', ')}.` : undefined}
-                    className={`p-3 bg-slate-50 border border-slate-200/80 rounded-xl transition-all space-y-2 group ${
-                      isLocked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-blue-50/50 cursor-pointer'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-mono font-bold flex items-center justify-center">
-                          #{idx + 1}
-                        </span>
-                        <div>
-                          <span className={`font-bold text-xs text-slate-900 transition-colors ${isLocked ? '' : 'group-hover:text-blue-600'}`}>
-                            {dept.deptName}
-                          </span>
-                          <span className="text-[11px] text-slate-500 ml-2">
-                            (HOD: {dept.deptHead})
-                          </span>
-                          {isLocked && <Lock className="w-3 h-3 text-slate-400 inline-block ml-1.5 align-text-top" />}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold font-mono ${
-                          meetsTarget ? 'text-emerald-700' : 'text-slate-700'
-                        }`}>
+            <div className="overflow-x-auto">
+              <div className="min-w-[720px]">
+                {/* Bars — heights, labels and the target line share one 0–100% scale */}
+                <div className="relative h-44 mt-5 flex gap-1.5 border-b border-slate-300">
+                  {/* 80% target line */}
+                  <div className="absolute left-0 right-0 border-t-2 border-dashed border-red-400 pointer-events-none z-10" style={{ bottom: '80%' }} />
+                  {complianceRanking.map((dept) => {
+                    const meetsTarget = dept.rate >= 80;
+                    const isLocked = !!lockedDepts && !lockedDepts.includes(dept.deptName);
+                    const h = Math.max(Math.min(dept.rate, 100), 1);
+                    return (
+                      <div
+                        key={dept.deptName}
+                        onClick={isLocked ? undefined : () => onSelectDepartment(dept.deptName)}
+                        title={isLocked
+                          ? `Access restricted. You are locked to: ${lockedDepts!.join(', ')}.`
+                          : `${dept.deptName} (HOD: ${dept.deptHead}): ${dept.rate}%, ${dept.health.completed} of ${dept.health.counted} tasks completed`}
+                        className={`relative flex-1 h-full flex justify-center group ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        <span
+                          className={`absolute z-20 bg-white px-0.5 rounded text-[11px] font-bold font-mono ${meetsTarget ? 'text-emerald-700' : 'text-slate-700'}`}
+                          style={{ bottom: `calc(${h}% + 2px)` }}
+                        >
                           {dept.rate}%
                         </span>
-                        <span className="text-[10px] text-slate-400">
-                          ({dept.health.completed}/{dept.health.counted})
-                        </span>
-                        {dept.routine.counted > 0 && (
-                          <span
-                            title="Recurring Health Index: recurring tasks completed of those that have come due"
-                            className="text-[10px] font-mono font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded"
-                          >
-                            Recurring {dept.routine.rate}% ({dept.routine.completed}/{dept.routine.counted})
-                          </span>
-                        )}
+                        <div
+                          style={{ height: `${h}%` }}
+                          className={`absolute bottom-0 w-[70%] max-w-[44px] rounded-t-md transition-all ${
+                            meetsTarget ? 'bg-emerald-500' : dept.rate > 50 ? 'bg-blue-500' : 'bg-amber-500'
+                          } ${isLocked ? '' : 'group-hover:brightness-110 group-hover:ring-2 group-hover:ring-blue-200'}`}
+                        />
                       </div>
-                    </div>
+                    );
+                  })}
+                </div>
 
-                    {/* Progress Bar */}
-                    <div className="relative w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                      {/* 80% target marker */}
-                      <div className="absolute left-[80%] top-0 bottom-0 w-0.5 bg-slate-400 z-10"></div>
-                      <div 
-                        style={{ width: `${Math.min(dept.rate, 100)}%` }}
-                        className={`h-full rounded-full transition-all ${
-                          meetsTarget ? 'bg-emerald-500' : dept.rate > 50 ? 'bg-blue-500' : 'bg-amber-500'
-                        }`}
-                      />
+                {/* Labels under each bar */}
+                <div className="flex gap-1.5 pt-1.5">
+                  {complianceRanking.map((dept, idx) => (
+                    <div key={dept.deptName} className="flex-1 min-w-0 text-center space-y-0.5">
+                      <div className="text-[10px] font-mono text-slate-400">#{idx + 1}</div>
+                      <div className="text-[11px] font-bold text-slate-800 leading-tight break-words">{dept.deptName}</div>
+                      <div className="text-[10px] text-slate-500 leading-tight truncate" title={`HOD: ${dept.deptHead}`}>{dept.deptHead}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{dept.health.completed}/{dept.health.counted}</div>
+                      {dept.routine.counted > 0 && (
+                        <span
+                          title={`Recurring Health Index: ${dept.routine.completed} of ${dept.routine.counted} recurring tasks completed`}
+                          className="inline-block text-[10px] font-mono font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-1 rounded"
+                        >
+                          R {dept.routine.rate}%
+                        </span>
+                      )}
                     </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Right Column: Department Roster Workload Breakdown */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4">
+          {/* Department Roster Workload Breakdown — all departments in a grid, no scrolling */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -513,7 +517,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
               </span>
             </div>
 
-            <div className="space-y-3 pt-2 max-h-[480px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pt-1">
               {filteredDepartments.map((dept) => {
                 const stats = deptStats[dept.deptName] || { total: 0, completed: 0, inProcess: 0, pending: 0, overdue: 0 };
                 const isLocked = !!lockedDepts && !lockedDepts.includes(dept.deptName);
@@ -522,7 +526,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                     key={dept.deptName}
                     onClick={isLocked ? undefined : () => onSelectDepartment(dept.deptName)}
                     title={isLocked ? `Access restricted. You are locked to: ${lockedDepts!.join(', ')}.` : undefined}
-                    className={`p-3.5 bg-white border border-slate-200 rounded-xl transition-all shadow-2xs space-y-2 group ${
+                    className={`p-3 bg-white border border-slate-200 rounded-xl transition-all shadow-2xs space-y-2 group ${
                       isLocked ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-300 cursor-pointer'
                     }`}
                   >
