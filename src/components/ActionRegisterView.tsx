@@ -728,10 +728,12 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
         </div>
 
         {/* Table Footer with Pagination */}
-        <div ref={footerRef} className="px-4 sm:px-6 py-2 bg-slate-50/80 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+        <div ref={footerRef} className="px-3 sm:px-6 py-2 bg-slate-50/80 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-xs text-slate-600">
           <div className="flex items-center gap-2">
-            <span>Rows per page:</span>
+            <span className="hidden sm:inline">Rows per page:</span>
             <select
+              aria-label="Rows per page"
+              title="Rows per page"
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
@@ -744,14 +746,14 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
               <option value={100}>100</option>
               <option value={actions.length}>All ({actions.length})</option>
             </select>
-            <span className="text-slate-400">|</span>
-            <span>
-              Showing {Math.min(filteredActions.length, (currentPage - 1) * pageSize + 1)}–
+            <span className="hidden sm:inline text-slate-400">|</span>
+            <span className="whitespace-nowrap">
+              <span className="hidden sm:inline">Showing </span>{Math.min(filteredActions.length, (currentPage - 1) * pageSize + 1)}–
               {Math.min(filteredActions.length, currentPage * pageSize)} of {filteredActions.length}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
@@ -759,8 +761,9 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            <span className="font-semibold text-slate-700 px-1">
-              Page {currentPage} of {totalPages}
+            <span className="font-semibold text-slate-700 px-1 whitespace-nowrap">
+              <span className="sm:hidden">{currentPage}/{totalPages}</span>
+              <span className="hidden sm:inline">Page {currentPage} of {totalPages}</span>
             </span>
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
