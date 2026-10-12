@@ -97,19 +97,21 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   // Frozen panes: the table scrolls inside a box that fills the rest of the
   // screen, so its heading row and the ID / PRI / DEPT columns stay in view.
   const tableBoxRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
   const [tableMaxH, setTableMaxH] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
     const fit = () => {
       const el = tableBoxRef.current;
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY;
-      const footer = 52; // pagination bar under the table
+      const footer = footerRef.current?.offsetHeight ?? 52; // pagination bar; wraps to two lines on phones
       setTableMaxH(Math.max(320, window.innerHeight - top - footer - 12));
     };
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
-  }, [showFilters]);
+    // The "With" box appearing adds a filter row on phones, moving the table down.
+  }, [showFilters, !!(ownDept || lockedDepts)]);
 
   // Today's operational date
   const TODAY_STR = getTodayStr();
@@ -215,13 +217,13 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2 sm:space-y-4">
       {/* Search & Filters Card matching image.png */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
         {/* Row 1 (blue strip): Search Bar + Department Dropdown + Assignee Dropdown + Create Task */}
         <div className="flex flex-wrap items-center gap-2 px-3 sm:px-4 py-2 bg-[#E6F1FB] border-b border-[#B5D4F4] border-l-4 border-l-[#185FA5]">
           {/* Main Search Input */}
-          <div className="relative flex-1 min-w-[200px] sm:min-w-[280px]">
+          <div className="relative flex-1 min-w-0 sm:min-w-[280px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -247,7 +249,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
           <button
             type="button"
             onClick={() => setShowFilters(v => !v)}
-            className={`sm:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border ${
+            className={`sm:hidden shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border ${
               showFilters || activeQuickFilter !== 'all' || localDept || relatedDept || filters.owner
                 ? 'bg-[#0C447C] text-white border-[#0C447C]'
                 : 'bg-white text-slate-700 border-slate-200'
@@ -257,9 +259,9 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             <span>Filters</span>
           </button>
 
-          <div className={`${showFilters ? 'flex' : 'hidden'} w-full flex-wrap gap-2 sm:contents`}>
+          <div className={`${showFilters ? 'grid' : 'hidden'} w-full grid-cols-2 gap-2 sm:contents`}>
           {/* Department Select Dropdown / Locked State */}
-          <div className="relative min-w-[150px]">
+          <div className="relative min-w-0 sm:min-w-[150px]">
             {isSingleDept ? (
               <div
                 className="w-full bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold py-2 px-3 rounded-xl flex items-center justify-between shadow-2xs cursor-not-allowed select-none"
@@ -300,7 +302,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
 
           {/* Related department: tasks between the chosen department and one other */}
           {(ownDept || lockedDepts) && (
-            <div className="relative min-w-[170px]">
+            <div className="relative min-w-0 sm:min-w-[170px]">
               <select
                 value={relatedDept}
                 onChange={(e) => {
@@ -322,7 +324,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
           )}
 
           {/* Assignees Select Dropdown matching "All Assignees (29)" */}
-          <div className="relative min-w-[160px]">
+          <div className={`relative min-w-0 sm:min-w-[160px] ${ownDept || lockedDepts ? 'col-span-2' : ''}`}>
             <select
               value={filters.owner}
               onChange={(e) => {
@@ -519,7 +521,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                 </th>
 
                 {/* Due Date Column */}
-                <th 
+                <th
                   onClick={() => handleSort('deadline')}
                   className="sticky top-0 z-20 bg-[#0C447C] py-2.5 px-3.5 w-36 cursor-pointer hover:bg-[#185FA5] transition-colors"
                 >
@@ -726,7 +728,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
         </div>
 
         {/* Table Footer with Pagination */}
-        <div className="px-4 sm:px-6 py-2 bg-slate-50/80 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+        <div ref={footerRef} className="px-4 sm:px-6 py-2 bg-slate-50/80 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
           <div className="flex items-center gap-2">
             <span>Rows per page:</span>
             <select
