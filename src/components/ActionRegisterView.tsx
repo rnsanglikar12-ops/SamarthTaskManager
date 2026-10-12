@@ -728,8 +728,8 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
         </div>
 
         {/* Table Footer with Pagination */}
-        <div ref={footerRef} className="px-3 sm:px-6 py-2 bg-slate-50/80 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-xs text-slate-600">
-          <div className="flex items-center gap-2">
+        <div ref={footerRef} className="px-3 sm:px-6 py-2 bg-slate-50/80 border-t border-slate-200 flex flex-nowrap items-center justify-between gap-2 sm:gap-3 text-xs text-slate-600">
+          <div className="flex items-center gap-2 min-w-0">
             <span className="hidden sm:inline">Rows per page:</span>
             <select
               aria-label="Rows per page"
@@ -744,16 +744,16 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
               <option value={25}>25</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
-              <option value={actions.length}>All ({actions.length})</option>
+              <option value={actions.length}>All</option>
             </select>
             <span className="hidden sm:inline text-slate-400">|</span>
-            <span className="whitespace-nowrap">
+            <span className="whitespace-nowrap truncate min-w-0">
               <span className="hidden sm:inline">Showing </span>{Math.min(filteredActions.length, (currentPage - 1) * pageSize + 1)}–
               {Math.min(filteredActions.length, currentPage * pageSize)} of {filteredActions.length}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
