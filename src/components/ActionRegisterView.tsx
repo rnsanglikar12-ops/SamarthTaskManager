@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react';
 import { 
   ActionItem, 
   FilterState, 
@@ -77,6 +77,20 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
   // Department-scoped users: narrow their list to the tasks shared with one
   // other department (raised to it, or received from it).
   const [relatedDept, setRelatedDept] = useState('');
+  // Two separate department choices:
+  //  • the header picker (next to Refresh) sets filters.dept — the department
+  //    being reviewed, shared by every screen;
+  //  • inside the register, "With <dept>" narrows to tasks between that
+  //    department and one other, and never changes the header.
+  // With no header department, the register's own department box is a local
+  // filter that also leaves the header alone.
+  const [localDept, setLocalDept] = useState('');
+  const scopeDept = filters.dept;
+  const ownDept = scopeDept || localDept || (lockedDepts?.length === 1 ? lockedDepts[0] : '');
+  // A "With" choice equal to the department now being reviewed would hide everything.
+  useEffect(() => {
+    if (relatedDept && relatedDept === ownDept) setRelatedDept('');
+  }, [ownDept, relatedDept]);
   // Phone only: department / assignee / status filters fold behind a button.
   const [showFilters, setShowFilters] = useState(false);
 
@@ -143,14 +157,15 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
         }
       }
 
-      // Department dropdown
-      if (filters.dept) {
+      // Department (header choice, else the register's own box)
+      const deptFilter = scopeDept || localDept;
+      if (deptFilter) {
         // If this item is an inter-departmental task, match if selected dept is either target OR originator
         if (item.originatorDept && isRaisedToOtherDept(item.originatorDept, item.dept)) {
-          if (item.dept !== filters.dept && item.originatorDept !== filters.dept) {
+          if (item.dept !== deptFilter && item.originatorDept !== deptFilter) {
             return false;
           }
-        } else if (item.dept !== filters.dept) {
+        } else if (item.dept !== deptFilter) {
           return false;
         }
       }
@@ -162,7 +177,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
 
       return true;
     });
-  }, [actions, filters, activeQuickFilter, TODAY_STR, relatedDept]);
+  }, [actions, filters, activeQuickFilter, TODAY_STR, relatedDept, scopeDept, localDept]);
 
   // Sort actions
   const sortedActions = useMemo(() => {
@@ -233,7 +248,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             type="button"
             onClick={() => setShowFilters(v => !v)}
             className={`sm:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border ${
-              showFilters || activeQuickFilter !== 'all' || filters.dept || filters.owner
+              showFilters || activeQuickFilter !== 'all' || localDept || relatedDept || filters.owner
                 ? 'bg-[#0C447C] text-white border-[#0C447C]'
                 : 'bg-white text-slate-700 border-slate-200'
             }`}
@@ -255,12 +270,20 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                   <span className="truncate">{lockedDepts![0]} (Locked)</span>
                 </div>
               </div>
+            ) : scopeDept ? (
+              <div
+                className="w-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold py-2 px-3 rounded-xl truncate"
+                title="Department chosen at the top, next to Refresh"
+              >
+                Dept: {scopeDept}
+              </div>
             ) : (
               <>
                 <select
-                  value={filters.dept}
+                  value={localDept}
                   onChange={(e) => {
-                    setFilters(prev => ({ ...prev, dept: e.target.value }));
+                    setLocalDept(e.target.value);
+                    if (e.target.value === relatedDept) setRelatedDept('');
                     setCurrentPage(1);
                   }}
                   className="w-full appearance-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-medium py-2 pl-3 pr-8 rounded-xl outline-none focus:border-blue-500 transition-colors cursor-pointer shadow-2xs"
@@ -275,8 +298,8 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
             )}
           </div>
 
-          {/* Related department (dept-scoped users only) */}
-          {lockedDepts && (
+          {/* Related department: tasks between the chosen department and one other */}
+          {(ownDept || lockedDepts) && (
             <div className="relative min-w-[170px]">
               <select
                 value={relatedDept}
@@ -284,11 +307,13 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                   setRelatedDept(e.target.value);
                   setCurrentPage(1);
                 }}
-                title="Show only tasks shared with this department"
-                className="w-full appearance-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-medium py-2 pl-3 pr-8 rounded-xl outline-none focus:border-blue-500 transition-colors cursor-pointer shadow-2xs"
+                title="Show only tasks shared with this department (raised to it or by it)"
+                className={`w-full appearance-none border hover:border-slate-300 text-xs font-medium py-2 pl-3 pr-8 rounded-xl outline-none focus:border-blue-500 transition-colors cursor-pointer shadow-2xs ${
+                  relatedDept ? 'bg-purple-50 border-purple-300 text-purple-800' : 'bg-white border-slate-200 text-slate-700'
+                }`}
               >
                 <option value="">With any department</option>
-                {TASK_DEPARTMENTS.filter(d => !lockedDepts.includes(d)).map(d => (
+                {TASK_DEPARTMENTS.filter(d => d !== ownDept && !(lockedDepts && !ownDept && lockedDepts.includes(d))).map(d => (
                   <option key={d} value={d}>With {d}</option>
                 ))}
               </select>
