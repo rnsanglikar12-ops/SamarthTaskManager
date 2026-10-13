@@ -848,6 +848,7 @@ export default function App() {
             actions={visibleActions}
             lockedDepts={lockedDepts}
             supervisors={supervisors}
+            scopeDept={filters.dept || null}
             onSelectDepartment={(dept) => {
               if (!guardDeptSelect(dept)) return;
               setGuardedFilters(prev => ({ ...prev, dept }));

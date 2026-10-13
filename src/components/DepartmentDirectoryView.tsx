@@ -24,6 +24,8 @@ interface DepartmentDirectoryViewProps {
   onSelectDepartment: (deptName: string) => void;
   lockedDepts?: string[] | null;
   supervisors?: { name: string; dept: string }[];
+  // Department chosen in the header; when set, every section shows just it.
+  scopeDept?: string | null;
 }
 
 type ViewTab = 'graphical' | 'split' | 'roster';
@@ -32,7 +34,8 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
   actions,
   onSelectDepartment,
   lockedDepts = null,
-  supervisors = []
+  supervisors = [],
+  scopeDept = null
 }) => {
   const [activeViewTab, setActiveViewTab] = useState<ViewTab>('graphical');
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,6 +46,13 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
   const [selectedVelocityDept, setSelectedVelocityDept] = useState(
     isSingleDept ? lockedDepts![0] : 'All Departments (Plant-wide)'
   );
+  // The departments this screen is about: the one chosen in the header, else
+  // the signed-in department head's own; null means the whole plant.
+  const focusDepts = scopeDept ? [scopeDept] : lockedDepts;
+  const velocityDept = scopeDept || selectedVelocityDept;
+  const velocityTitle = velocityDept !== 'All Departments (Plant-wide)'
+    ? velocityDept
+    : lockedDepts ? 'My Departments' : 'Plant-wide';
 
   const todayStr = getTodayStr();
 
@@ -80,14 +90,14 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
   const departmentsList = useMemo(() => {
     // Static org structure plus supervisors added at runtime through
     // Manage Supervisors, so the roster never lags behind the Assignee list.
-    return SAMARTH_ORG_STRUCTURE.filter(d => d.deptName !== 'MD').map(d => ({
+    return SAMARTH_ORG_STRUCTURE.filter(d => d.deptName !== 'MD' && (!focusDepts || focusDepts.includes(d.deptName))).map(d => ({
       ...d,
       supervisors: Array.from(new Set([
         ...d.supervisors,
         ...supervisors.filter(s => s.dept === d.deptName).map(s => s.name)
       ]))
     }));
-  }, [supervisors]);
+  }, [supervisors, focusDepts?.join('|')]);
 
   // Filtered departments based on search
   const filteredDepartments = useMemo(() => {
@@ -102,11 +112,11 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
 
   // Filter actions for Velocity section
   const velocityActions = useMemo(() => {
-    if (selectedVelocityDept === 'All Departments (Plant-wide)') {
+    if (velocityDept === 'All Departments (Plant-wide)') {
       return actions;
     }
-    return actions.filter(a => (a.dept || 'General').toLowerCase() === selectedVelocityDept.toLowerCase());
-  }, [actions, selectedVelocityDept]);
+    return actions.filter(a => (a.dept || 'General').toLowerCase() === velocityDept.toLowerCase());
+  }, [actions, velocityDept]);
 
   // Real trailing-4-week velocity: four consecutive 7-day windows ending today.
   // "Generated" = tasks created in the window (createdAt timestamp); "Closed" =
@@ -196,7 +206,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                 Department Leadership Scorecards & Graphical Roster
               </h2>
               <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-blue-200">
-                {departmentsList.length} Departments Active
+                {focusDepts ? focusDepts.join(', ') : `${departmentsList.length} Departments Active`}
               </span>
             </div>
             <p className="hidden md:block text-xs text-slate-500">
@@ -272,7 +282,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-blue-600" />
-                <span>Plant-wide Velocity: New Tasks Generated vs Closed (Last 4 Weeks)</span>
+                <span>{velocityTitle} Velocity: New Tasks Generated vs Closed (Last 4 Weeks)</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 Incoming abnormalities compared with shopfloor verified closures. Tasks imported from the old register on 15 Sep aren't counted as generated.
@@ -285,6 +295,13 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
                 <div className="py-1 px-3 bg-amber-50 border border-amber-300 rounded-lg text-xs font-bold text-amber-950 flex items-center gap-1 shadow-2xs">
                   <Lock className="w-3 h-3 text-amber-700" />
                   <span>{lockedDepts![0]} (Locked)</span>
+                </div>
+              ) : scopeDept ? (
+                <div
+                  className="py-1 px-3 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 shadow-2xs"
+                  title="Department chosen at the top, next to Refresh"
+                >
+                  {scopeDept}
                 </div>
               ) : (
                 <select
@@ -442,7 +459,7 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
             </div>
 
             <div className="overflow-x-auto">
-              <div className="min-w-[720px]">
+              <div className={complianceRanking.length > 4 ? 'min-w-[720px]' : ''}>
                 {/* Bars — heights, labels and the target line share one 0–100% scale */}
                 <div className="relative h-44 mt-5 flex gap-1.5 border-b border-slate-300">
                   {/* 80% target line */}
@@ -578,7 +595,9 @@ export const DepartmentDirectoryView: React.FC<DepartmentDirectoryViewProps> = (
         <div className="space-y-4 pt-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">
-              Complete {departmentsList.length}-Department Organizational Cards & Supervisory Roster
+              {focusDepts
+                ? `${focusDepts.join(', ')}: Organizational Card${focusDepts.length > 1 ? 's' : ''} & Supervisory Roster`
+                : `Complete ${departmentsList.length}-Department Organizational Cards & Supervisory Roster`}
             </h3>
             <span className="text-xs text-slate-500">
               Mentor: <strong>{MENTOR_NAME}</strong>
