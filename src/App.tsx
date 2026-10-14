@@ -699,7 +699,7 @@ export default function App() {
           it kept the task table pushed down the screen. */}
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-3">
+      <main className="flex-1 w-full px-1.5 sm:px-6 lg:px-8 py-2 sm:py-3">
 
         {/* Cockpit View (Executive Analytics & KPI Cards) */}
         {activeTab === 'cockpit' && (

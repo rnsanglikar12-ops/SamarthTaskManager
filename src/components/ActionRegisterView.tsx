@@ -469,7 +469,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                 {/* ID Column */}
                 <th
                   onClick={() => handleSort('id')}
-                  className="sticky top-0 left-0 z-30 bg-[#0C447C] py-2.5 px-3 w-24 min-w-24 max-w-24 cursor-pointer hover:bg-[#185FA5] transition-colors"
+                  className="sticky top-0 left-0 z-30 bg-[#0C447C] py-2.5 w-[68px] min-w-[68px] max-w-[68px] px-2 sm:w-24 sm:min-w-24 sm:max-w-24 sm:px-3 cursor-pointer hover:bg-[#185FA5] transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>ID</span>
@@ -478,14 +478,14 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                 </th>
 
                 {/* Priority Column */}
-                <th className="sticky top-0 sm:left-24 z-20 sm:z-30 bg-[#0C447C] py-2.5 px-2 w-12 min-w-12 max-w-12 text-center">
+                <th className="sticky top-0 sm:left-24 z-20 sm:z-30 bg-[#0C447C] py-2.5 w-9 min-w-9 max-w-9 px-1 sm:w-12 sm:min-w-12 sm:max-w-12 sm:px-2 text-center">
                   <span>PRI</span>
                 </th>
 
                 {/* Department Column */}
                 <th 
                   onClick={() => handleSort('dept')}
-                  className="sticky top-0 sm:left-36 z-20 sm:z-30 bg-[#0C447C] sm:shadow-[2px_0_0_#185FA5] py-2.5 px-3 w-32 min-w-32 max-w-32 cursor-pointer hover:bg-[#185FA5] transition-colors"
+                  className="sticky top-0 sm:left-36 z-20 sm:z-30 bg-[#0C447C] sm:shadow-[2px_0_0_#185FA5] py-2.5 w-24 min-w-24 max-w-24 px-2 sm:w-32 sm:min-w-32 sm:max-w-32 sm:px-3 cursor-pointer hover:bg-[#185FA5] transition-colors"
                 >
                   <div className="flex items-center gap-1">
                     <span>DEPT</span>
@@ -494,7 +494,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                 </th>
 
                 {/* Description Column */}
-                <th className="sticky top-0 z-20 bg-[#0C447C] py-2.5 px-4 min-w-[340px]">
+                <th className="sticky top-0 z-20 bg-[#0C447C] py-2.5 px-3 sm:px-4 min-w-[220px] sm:min-w-[340px]">
                   <span>5W1H DESCRIPTION & ABNORMALITY</span>
                 </th>
 
@@ -576,12 +576,12 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                       className={`${rowBg} hover:bg-[#F2F7FD] [&>td]:border-b [&>td]:border-slate-100 cursor-pointer transition-colors group`}
                     >
                       {/* ID */}
-                      <td className={`${frozen} sticky left-0 ${edgeClass} py-2.5 px-3 w-24 min-w-24 max-w-24 font-mono text-xs font-bold text-blue-700 whitespace-nowrap`}>
+                      <td className={`${frozen} sticky left-0 ${edgeClass} py-2.5 w-[68px] min-w-[68px] max-w-[68px] px-2 sm:w-24 sm:min-w-24 sm:max-w-24 sm:px-3 font-mono text-xs font-bold text-blue-700 whitespace-nowrap`}>
                         {item.id}
                       </td>
 
                       {/* PRI */}
-                      <td className={`${frozen} sm:sticky sm:left-24 py-2.5 px-2 w-12 min-w-12 max-w-12 text-center`}>
+                      <td className={`${frozen} sm:sticky sm:left-24 py-2.5 w-9 min-w-9 max-w-9 px-1 sm:w-12 sm:min-w-12 sm:max-w-12 sm:px-2 text-center`}>
                         <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${
                           item.priority === 'A'
                             ? 'bg-red-700 text-white border border-red-700'
@@ -592,7 +592,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                       </td>
 
                       {/* DEPT */}
-                      <td className={`${frozen} sm:sticky sm:left-36 sm:shadow-[2px_0_0_#E2E8F0] py-2.5 px-3 w-32 min-w-32 max-w-32 text-xs font-semibold text-slate-700`}>
+                      <td className={`${frozen} sm:sticky sm:left-36 sm:shadow-[2px_0_0_#E2E8F0] py-2.5 w-24 min-w-24 max-w-24 px-2 sm:w-32 sm:min-w-32 sm:max-w-32 sm:px-3 text-xs font-semibold text-slate-700`}>
                         <div className="font-semibold text-slate-800">{item.dept}</div>
                         {item.originatorDept && isRaisedToOtherDept(item.originatorDept, item.dept) && (
                           <div 
@@ -608,7 +608,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                       </td>
 
                       {/* 5W1H DESCRIPTION & ABNORMALITY */}
-                      <td className="py-2.5 px-4 text-xs">
+                      <td className="py-2.5 px-3 sm:px-4 text-xs">
                         <div className="font-medium text-slate-900 leading-relaxed group-hover:text-blue-950">
                           {item.desc}
                         </div>
@@ -629,17 +629,17 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
                       </td>
 
                       {/* ASSIGNEE */}
-                      <td className="py-2.5 px-3.5 text-xs font-medium text-slate-700 whitespace-nowrap">
+                      <td className="py-2.5 px-2.5 sm:px-3.5 text-xs font-medium text-slate-700 whitespace-nowrap">
                         {item.owner}
                       </td>
 
                       {/* CREATE DATE */}
-                      <td className="py-2.5 px-3.5 whitespace-nowrap font-mono text-xs text-slate-600">
+                      <td className="py-2.5 px-2.5 sm:px-3.5 whitespace-nowrap font-mono text-xs text-slate-600">
                         {shortDate(isoToLocalDateStr(item.timestamp))}
                       </td>
 
                       {/* DUE DATE */}
-                      <td className="py-2.5 px-3.5 whitespace-nowrap">
+                      <td className="py-2.5 px-2.5 sm:px-3.5 whitespace-nowrap">
                         {isOverdue ? (
                           <div className="text-xs font-bold text-red-700 leading-tight">
                             <div className="flex items-center gap-1.5">
