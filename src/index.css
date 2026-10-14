@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* The tablet/computer layout (sm:) needs some height as well as width. A phone
+   turned sideways is wide but only ~400px tall, so it keeps the phone layout
+   (menu button, Filters button) instead of a header that fills half the screen. */
+@custom-variant sm (@media (width >= 40rem) and (height > 500px));
+
 :root {
   --bg-main: #020617;
   --bg-surface: #0f172a;

@@ -105,7 +105,7 @@ export const ActionRegisterView: React.FC<ActionRegisterViewProps> = ({
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY;
       const footer = footerRef.current?.offsetHeight ?? 52; // pagination bar; wraps to two lines on phones
-      setTableMaxH(Math.max(320, window.innerHeight - top - footer - 12));
+      setTableMaxH(Math.max(200, window.innerHeight - top - footer - 12));
     };
     fit();
     window.addEventListener('resize', fit);
