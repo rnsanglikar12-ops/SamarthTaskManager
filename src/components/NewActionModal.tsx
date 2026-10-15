@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ActionItem, Priority, Recurrence } from '../types';
 import { TASK_DEPARTMENTS, combineAssigneesForDept, getDefaultAssignee } from '../data/orgStructure';
 import { Supervisor } from '../utils/dataService';
-import { CUSTOMER_COMPLAINT_CATEGORY, CUSTOMER_MOM_CATEGORY } from '../data/sentinelDataLoader';
+import { CUSTOMER_COMPLAINT_CATEGORY, CUSTOMER_MOM_CATEGORY, CUSTOMER_RETURN_CATEGORY, SUPPLIER_DEBIT_CATEGORY } from '../data/sentinelDataLoader';
 import { uploadPhotoToGoogleSheet, uploadDocumentToStorage } from '../utils/dataService';
 import { compressImage } from '../utils/imageUtils';
 import {
@@ -28,12 +28,14 @@ interface NewActionModalProps {
   lockedDepts?: string[] | null;
   supervisors?: Supervisor[];
   // Which kind of task to start as, from the tab the user is on.
-  defaultKind?: 'saturday_mom' | 'customer_complaint' | 'customer_mom' | 'broadcast';
+  defaultKind?: 'saturday_mom' | 'customer_complaint' | 'customer_mom' | 'customer_return' | 'supplier_debit' | 'broadcast';
 }
 
 const MOM_TRIGGER = '📋 Saturday MOM Operational Action';
 const CUSTOMER_COMPLAINT_TRIGGER = '🚨 Customer Complaint';
 const CUSTOMER_MOM_TRIGGER = '🤝 Customer MOM';
+const CUSTOMER_RETURN_TRIGGER = '↩️ Customer Return';
+const SUPPLIER_DEBIT_TRIGGER = '🧾 Supplier Debit';
 
 // Default target date for a new task: three days from today (local date).
 function defaultDeadline(): string {
@@ -65,6 +67,8 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
     defaultKind === 'saturday_mom' ? MOM_TRIGGER
       : defaultKind === 'customer_complaint' ? CUSTOMER_COMPLAINT_TRIGGER
       : defaultKind === 'customer_mom' ? CUSTOMER_MOM_TRIGGER
+      : defaultKind === 'customer_return' ? CUSTOMER_RETURN_TRIGGER
+      : defaultKind === 'supplier_debit' ? SUPPLIER_DEBIT_TRIGGER
       : '💡 General Kaizen (Continuous Improvement)'
   );
   const [isBroadcast, setIsBroadcast] = useState(defaultKind === 'broadcast');
@@ -221,6 +225,8 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
       isMOM: originTrigger === MOM_TRIGGER,
       category: originTrigger === CUSTOMER_COMPLAINT_TRIGGER ? CUSTOMER_COMPLAINT_CATEGORY
         : originTrigger === CUSTOMER_MOM_TRIGGER ? CUSTOMER_MOM_CATEGORY
+        : originTrigger === CUSTOMER_RETURN_TRIGGER ? CUSTOMER_RETURN_CATEGORY
+        : originTrigger === SUPPLIER_DEBIT_TRIGGER ? SUPPLIER_DEBIT_CATEGORY
         : undefined,
       machineNote: machineEqNo || undefined
     });
@@ -307,7 +313,9 @@ export const NewActionModal: React.FC<NewActionModalProps> = ({
                 <option value="⚡ Line Breakdown / Equipment Abnormality">⚡ Line Breakdown / Equipment Abnormality</option>
                 <option value={MOM_TRIGGER}>{MOM_TRIGGER}</option>
                 <option value={CUSTOMER_COMPLAINT_TRIGGER}>{CUSTOMER_COMPLAINT_TRIGGER}</option>
+                <option value={CUSTOMER_RETURN_TRIGGER}>{CUSTOMER_RETURN_TRIGGER}</option>
                 <option value={CUSTOMER_MOM_TRIGGER}>{CUSTOMER_MOM_TRIGGER}</option>
+                <option value={SUPPLIER_DEBIT_TRIGGER}>{SUPPLIER_DEBIT_TRIGGER}</option>
                 <option value="🤝 CFT Handshake Resolution">🤝 CFT Handshake Resolution</option>
                 <option value="📊 DWM Daily Work Management">📊 DWM Daily Work Management</option>
               </select>

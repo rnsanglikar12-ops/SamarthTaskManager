@@ -21,7 +21,7 @@ import {
   FileText
 } from 'lucide-react';
 import { AuthUser, can } from '../utils/auth';
-import { isRaisedToOtherDept, getTodayStr, customerTagOf, CustomerTag, CUSTOMER_COMPLAINT_CATEGORY, CUSTOMER_MOM_CATEGORY, KAIZEN_CATEGORIES } from '../data/sentinelDataLoader';
+import { isRaisedToOtherDept, getTodayStr, customerTagOf, CustomerTag, CUSTOMER_COMPLAINT_CATEGORY, CUSTOMER_MOM_CATEGORY, CUSTOMER_RETURN_CATEGORY, SUPPLIER_DEBIT_CATEGORY, KAIZEN_CATEGORIES } from '../data/sentinelDataLoader';
 
 function recurringSinceLabel(action: ActionItem): string | null {
   if (action.recurrence === 'One-Time') return null;
@@ -930,18 +930,20 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             {notesError && <p className="mt-1 text-[11px] font-semibold text-red-600">{notesError}</p>}
           </div>
 
-          {/* Customer tag — lists the task under the Master Matrix's Customer
-              Complaint or Customer MOM filter. Tap the selected one again to
-              clear it. */}
+          {/* Customer / supplier tag — puts the task in the Customer Complaint,
+              Customer Return, Customer MOM or Supplier Debit tab. Tap the
+              selected one again to clear it. */}
           <div className="p-3.5 bg-teal-50/50 border border-teal-200 rounded-xl space-y-2">
             <span className={`font-bold text-xs flex items-center gap-1.5 ${canEditTask ? 'text-teal-800' : 'text-slate-400'}`}>
               <Handshake className={`w-3.5 h-3.5 ${canEditTask ? 'text-teal-600' : 'text-slate-400'}`} />
-              <span>Customer tag</span>
+              <span>Customer / Supplier tag</span>
             </span>
             <div className="flex flex-wrap gap-2">
               {([
                 [CUSTOMER_COMPLAINT_CATEGORY, 'bg-rose-600 border-rose-600'],
+                [CUSTOMER_RETURN_CATEGORY, 'bg-orange-600 border-orange-600'],
                 [CUSTOMER_MOM_CATEGORY, 'bg-teal-600 border-teal-600'],
+                [SUPPLIER_DEBIT_CATEGORY, 'bg-indigo-600 border-indigo-600'],
               ] as const).map(([tag, activeCls]) => (
                 <button
                   key={tag}

@@ -7,7 +7,9 @@ import {
   isKaizenAction,
   getTodayStr,
   isCustomerComplaint,
-  isCustomerMOM
+  isCustomerMOM,
+  isCustomerReturn,
+  isSupplierDebit
 } from './data/sentinelDataLoader';
 import {
   subscribeToTabBroadcast,
@@ -644,6 +646,8 @@ export default function App() {
   const recurringActions = useMemo(() => visibleActions.filter(a => a.recurrence !== 'One-Time'), [visibleActions]);
   const complaintActions = useMemo(() => visibleActions.filter(isCustomerComplaint), [visibleActions]);
   const customerMomActions = useMemo(() => visibleActions.filter(isCustomerMOM), [visibleActions]);
+  const customerReturnActions = useMemo(() => visibleActions.filter(isCustomerReturn), [visibleActions]);
+  const supplierDebitActions = useMemo(() => visibleActions.filter(isSupplierDebit), [visibleActions]);
   const broadcastActions = useMemo(() => visibleActions.filter(a => a.isBroadcast), [visibleActions]);
   // CFT Handshake: strictly tasks raised to another department only (originatorDept != dept)
   const cftActions = useMemo(() => visibleActions.filter(a => isRaisedToOtherDept(a.originatorDept, a.dept)), [visibleActions]);
@@ -672,6 +676,8 @@ export default function App() {
         momCount={momActions.length}
         complaintCount={complaintActions.length}
         customerMomCount={customerMomActions.length}
+        customerReturnCount={customerReturnActions.length}
+        supplierDebitCount={supplierDebitActions.length}
         broadcastCount={broadcastActions.length}
         recurringCount={recurringActions.length}
         kaizenCount={stats.kaizenCount}
@@ -778,9 +784,9 @@ export default function App() {
 
         {/* Customer Complaint / Customer MOM / Broadcast tabs — same register
             and status filters as the other task-type tabs */}
-        {(['customer_complaint', 'customer_mom', 'broadcast'] as const).map(tab => {
+        {(['customer_complaint', 'customer_return', 'customer_mom', 'supplier_debit', 'broadcast'] as const).map(tab => {
           if (activeTab !== tab) return null;
-          const list = { customer_complaint: complaintActions, customer_mom: customerMomActions, broadcast: broadcastActions }[tab];
+          const list = { customer_complaint: complaintActions, customer_return: customerReturnActions, customer_mom: customerMomActions, supplier_debit: supplierDebitActions, broadcast: broadcastActions }[tab];
           return (
             <div key={tab} className="space-y-4">
               <ActionRegisterView
@@ -882,7 +888,7 @@ export default function App() {
           onAdd={handleAddAction}
           lockedDepts={lockedDepts}
           supervisors={supervisors}
-          defaultKind={activeTab === 'saturday_mom' || activeTab === 'customer_complaint' || activeTab === 'customer_mom' || activeTab === 'broadcast' ? activeTab : undefined}
+          defaultKind={(['saturday_mom', 'customer_complaint', 'customer_return', 'customer_mom', 'supplier_debit', 'broadcast'] as const).find(k => k === activeTab)}
         />
       )}
 

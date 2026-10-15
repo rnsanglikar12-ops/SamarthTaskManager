@@ -23,13 +23,15 @@ import {
   Trash2,
   MessageSquareWarning,
   Handshake,
-  Radio
+  Radio,
+  Undo2,
+  Receipt
 } from 'lucide-react';
 import { isGoogleSheetConnected } from '../utils/dataService';
 import { AuthUser, can } from '../utils/auth';
 import { TASK_DEPARTMENTS } from '../data/orgStructure';
 
-export type NavTab = 'cockpit' | 'matrix' | 'saturday_mom' | 'customer_complaint' | 'customer_mom' | 'recurring_pm' | 'cft_handshake' | 'broadcast' | 'kaizen' | 'dept_leaders';
+export type NavTab = 'cockpit' | 'matrix' | 'saturday_mom' | 'customer_complaint' | 'customer_return' | 'customer_mom' | 'supplier_debit' | 'recurring_pm' | 'cft_handshake' | 'broadcast' | 'kaizen' | 'dept_leaders';
 
 interface HeaderProps {
   activeTab: NavTab;
@@ -52,7 +54,9 @@ interface HeaderProps {
   cftCount?: number;
   momCount?: number;
   complaintCount?: number;
+  customerReturnCount?: number;
   customerMomCount?: number;
+  supplierDebitCount?: number;
   broadcastCount?: number;
   recurringCount?: number;
   kaizenCount?: number;
@@ -73,7 +77,9 @@ const TAB_ACTIVE_CLASSES: Record<TabColor, string> = {
 const TAB_HINTS: Partial<Record<NavTab, string>> = {
   saturday_mom: 'Minutes of Meeting action points reviewed weekly with Mr. Sanglikar & Department Heads',
   customer_complaint: 'Quality issues reported by customers, tracked to a verified countermeasure',
+  customer_return: 'Parts returned or rejected by customers, tracked to disposal and countermeasure',
   customer_mom: 'Action points agreed in customer meetings and reviews',
+  supplier_debit: 'Debit notes raised on suppliers for rejected or short material, tracked to closure',
   recurring_pm: 'Cyclic routines, machine calibrations and maintenance checks',
   cft_handshake: 'Tasks raised by one department to another (Originator Dept ≠ Target Dept)',
   broadcast: 'Instructions sent to every department at once; each department tracks its own copy',
@@ -111,7 +117,9 @@ export const Header: React.FC<HeaderProps> = ({
   cftCount,
   momCount = 0,
   complaintCount = 0,
+  customerReturnCount = 0,
   customerMomCount = 0,
+  supplierDebitCount = 0,
   broadcastCount = 0,
   recurringCount = 0,
   kaizenCount = 0,
@@ -165,17 +173,21 @@ export const Header: React.FC<HeaderProps> = ({
     return () => ro.disconnect();
   }, []);
 
-  const navTabs: { id: NavTab; label: string; icon: React.ElementType; badge: string; color: TabColor }[] = [
-    { id: 'cockpit', label: 'Cockpit', icon: LayoutGrid, badge: overdueCount > 0 ? String(overdueCount) : '', color: 'blue' },
-    { id: 'matrix', label: 'Master Matrix', icon: SlidersHorizontal, badge: String(totalCount), color: 'blue' },
-    { id: 'saturday_mom', label: 'Saturday MOM', icon: Calendar, badge: String(momCount), color: 'blue' },
-    { id: 'customer_complaint', label: 'Customer Complaint', icon: MessageSquareWarning, badge: String(complaintCount), color: 'blue' },
-    { id: 'customer_mom', label: 'Customer MOM', icon: Handshake, badge: String(customerMomCount), color: 'blue' },
-    { id: 'recurring_pm', label: 'Recurring PM', icon: RotateCw, badge: String(recurringCount), color: 'amber' },
-    { id: 'cft_handshake', label: 'CFT Handshake', icon: Users, badge: String(cftCount ?? 0), color: 'purple' },
-    { id: 'broadcast', label: 'Broadcast', icon: Radio, badge: String(broadcastCount), color: 'blue' },
-    { id: 'kaizen', label: 'Kaizen / DSI', icon: Sparkles, badge: String(kaizenCount), color: 'emerald' },
-    { id: 'dept_leaders', label: 'Dept Leaders', icon: UserCheck, badge: '', color: 'blue' }
+  // Grouped left to right: overview, customer & supplier, internal routines,
+  // improvement. A thin divider separates the groups in the desktop tab band.
+  const navTabs: { id: NavTab; label: string; short?: string; icon: React.ElementType; badge: string; color: TabColor; group: number }[] = [
+    { id: 'cockpit', label: 'Cockpit', icon: LayoutGrid, badge: overdueCount > 0 ? String(overdueCount) : '', color: 'blue', group: 1 },
+    { id: 'matrix', label: 'Master Matrix', short: 'Matrix', icon: SlidersHorizontal, badge: String(totalCount), color: 'blue', group: 1 },
+    { id: 'dept_leaders', label: 'Dept Leaders', short: 'Leaders', icon: UserCheck, badge: '', color: 'blue', group: 1 },
+    { id: 'customer_complaint', label: 'Customer Complaint', short: 'Complaint', icon: MessageSquareWarning, badge: String(complaintCount), color: 'blue', group: 2 },
+    { id: 'customer_return', label: 'Customer Return', short: 'Cust. Return', icon: Undo2, badge: String(customerReturnCount), color: 'blue', group: 2 },
+    { id: 'customer_mom', label: 'Customer MOM', short: 'Cust. MOM', icon: Handshake, badge: String(customerMomCount), color: 'blue', group: 2 },
+    { id: 'supplier_debit', label: 'Supplier Debit', short: 'Supp. Debit', icon: Receipt, badge: String(supplierDebitCount), color: 'blue', group: 2 },
+    { id: 'saturday_mom', label: 'Saturday MOM', short: 'Sat. MOM', icon: Calendar, badge: String(momCount), color: 'blue', group: 3 },
+    { id: 'cft_handshake', label: 'CFT Handshake', short: 'CFT', icon: Users, badge: String(cftCount ?? 0), color: 'purple', group: 3 },
+    { id: 'recurring_pm', label: 'Recurring PM', short: 'Recurring', icon: RotateCw, badge: String(recurringCount), color: 'amber', group: 3 },
+    { id: 'broadcast', label: 'Broadcast', icon: Radio, badge: String(broadcastCount), color: 'blue', group: 3 },
+    { id: 'kaizen', label: 'Kaizen / DSI', short: 'Kaizen', icon: Sparkles, badge: String(kaizenCount), color: 'emerald', group: 4 },
   ];
 
   const accountMenuItems = (closeMenu: () => void) => (
@@ -437,29 +449,36 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Row 2: Navigation Tabs — desktop/tablet only. Ten tabs: icons show only
           on wide screens and the row wraps rather than hiding tabs off-screen. */}
-      <div className={`hidden sm:flex flex-wrap w-full px-4 lg:px-6 py-1.5 items-center gap-1 ${TAB_STRIP_BG} border-y`}>
-        {navTabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              title={TAB_HINTS[tab.id]}
-              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-200 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <Icon className={`hidden min-[1800px]:block w-3.5 h-3.5 ${isActive ? 'text-slate-500' : 'text-slate-400'}`} />
-              <span>{tab.label}</span>
-              {tab.badge && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-amber-400 text-[#0B1E33] shadow-xs'}`}>
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className={`hidden sm:flex flex-wrap w-full px-4 lg:px-6 py-1.5 items-center gap-x-3 lg:gap-x-6 gap-y-1 ${TAB_STRIP_BG} border-y`}>
+        {/* Each group stays whole on a row, with a wide gap between groups.
+            Below laptop width the shorter names keep the band to two rows. */}
+        {[1, 2, 3, 4].map(group => (
+          <div key={group} className="flex items-center gap-1">
+            {navTabs.filter(t => t.group === group).map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  title={TAB_HINTS[tab.id]}
+                  className={`flex items-center gap-1.5 px-1.5 lg:px-2 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    isActive ? TAB_ACTIVE_CLASSES[tab.color] : 'text-slate-200 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Icon className={`hidden min-[2200px]:block w-3.5 h-3.5 ${isActive ? 'text-slate-500' : 'text-slate-400'}`} />
+                  <span className={tab.short ? 'hidden lg:inline' : ''}>{tab.label}</span>
+                  {tab.short && <span className="lg:hidden">{tab.short}</span>}
+                  {tab.badge && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? TAB_BADGE_CLASSES[tab.color] : 'bg-amber-400 text-[#0B1E33] shadow-xs'}`}>
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       {/* Mobile Menu Drawer — everything (dept scope, sync, account, nav tabs) in one place */}
