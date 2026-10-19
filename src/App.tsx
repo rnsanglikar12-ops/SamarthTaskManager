@@ -105,6 +105,14 @@ function computeStats(list: ActionItem[]): SentinelStats {
   };
 }
 
+// Adds newly created tasks to the front of the list. The live-update feed
+// often delivers the same new row before the create call returns, so any id
+// already on the list is replaced instead of added a second time.
+function prependById(prev: ActionItem[], items: ActionItem[]): ActionItem[] {
+  const ids = new Set(items.map(a => a.id));
+  return [...items, ...prev.filter(a => !ids.has(a.id))];
+}
+
 export default function App() {
   const [session, setSession] = useState<AuthUser | null>(() => getSession());
   const [actions, setActions] = useState<ActionItem[]>(() => getInitialActions());
@@ -503,7 +511,7 @@ export default function App() {
       }
 
       setActions(prev => {
-        const next = [...newItems, ...prev];
+        const next = prependById(prev, newItems);
         saveActionsToStorage(next);
         return next;
       });
@@ -533,7 +541,7 @@ export default function App() {
       afterPhoto: created.afterPhoto ?? newItemData.afterPhoto
     };
     setActions(prev => {
-      const next = [newItem, ...prev];
+      const next = prependById(prev, [newItem]);
       saveActionsToStorage(next);
       return next;
     });
