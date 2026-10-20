@@ -159,7 +159,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
   // Tracks which footer/verification action is mid-flight so its button can
   // show a spinner and every action button can be disabled — prevents a
   // double-click from firing a duplicate save/delete request.
-  const [pendingAction, setPendingAction] = useState<null | 'save' | 'resolve' | 'verify' | 'rework' | 'delete'>(null);
+  const [pendingAction, setPendingAction] = useState<null | 'save' | 'resolve' | 'verify' | 'rework' | 'delete' | 'stop'>(null);
   const isBusy = pendingAction !== null || uploadingSlot !== null;
 
   // Role permissions
@@ -224,6 +224,43 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
       ...action,
       status,
       actionNotes,
+      evidence,
+      priority,
+      deadline,
+      attachedPhoto: attachedPhoto || undefined,
+      afterPhoto: afterPhoto || undefined,
+      isKaizen,
+      kaizenBenefit: isKaizen ? kaizenBenefit : undefined,
+      kaizenCategory: isKaizen ? kaizenCategory : undefined,
+      evidencePdf: evidencePdf || undefined,
+      category
+    });
+    setPendingAction(null);
+    if (ok) onClose();
+  };
+
+  // Stop a recurring series once its purpose is served: this open occurrence
+  // becomes one-time (so closing it opens nothing new), a dated note records
+  // who stopped it and why, and the task itself stays open to be closed
+  // normally. Earlier occurrences keep their history.
+  const canStopRecurring = action.recurrence !== 'One-Time' && action.status !== 'Completed' && canEditTask
+    && !!session && ['DeptHead', 'PlantHead', 'MD', 'Admin'].includes(session.role);
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stopReason, setStopReason] = useState('');
+  const [stopError, setStopError] = useState<string | null>(null);
+  const handleStopRecurring = async () => {
+    if (isBusy) return;
+    if (!stopReason.trim()) {
+      setStopError('Write why this routine is no longer needed.');
+      return;
+    }
+    setPendingAction('stop');
+    const todayStr = new Date().toLocaleDateString('en-GB');
+    const stamp = `[Recurrence (${action.recurrence}) stopped by ${session?.displayName ?? 'user'} on ${todayStr}: ${stopReason.trim()}]`;
+    const ok = await onSave({
+      ...action,
+      recurrence: 'One-Time',
+      actionNotes: actionNotes ? `${actionNotes} | ${stamp}` : stamp,
       evidence,
       priority,
       deadline,
@@ -454,6 +491,16 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     {action.recurrence} PM
                   </span>
                 )}
+                {canStopRecurring && !stopOpen && (
+                  <button
+                    type="button"
+                    onClick={() => { setStopOpen(true); setStopError(null); }}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold border border-purple-300 text-purple-700 bg-white hover:bg-purple-50"
+                    title="Stop this routine once its purpose is served"
+                  >
+                    Stop recurring
+                  </button>
+                )}
                 {isHandshake && (
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
                     <span>🤝 Handshake: {originatorDept} → {action.dept}</span>
@@ -480,6 +527,45 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
+
+          {/* Stop a recurring series */}
+          {stopOpen && (
+            <div className="p-4 bg-purple-50 border-2 border-purple-300 rounded-xl space-y-3 animate-in fade-in duration-150">
+              <div className="text-purple-950">
+                <p className="font-bold text-sm">Stop this {action.recurrence.toLowerCase()} routine?</p>
+                <p className="text-xs mt-1">
+                  This task becomes a one-time task, so <b>no new occurrence opens</b> when it is closed.
+                  It stays open for you to complete. Earlier occurrences and their history are kept.
+                </p>
+              </div>
+              <input
+                type="text"
+                autoFocus
+                value={stopReason}
+                onChange={(e) => { setStopReason(e.target.value); if (stopError) setStopError(null); }}
+                placeholder="Why is it no longer needed? e.g. Purpose served – supplier issue closed"
+                className={`w-full p-2.5 bg-white border ${stopError ? 'border-red-400' : 'border-purple-200'} rounded-lg text-xs text-slate-800 outline-none focus:border-purple-500`}
+              />
+              {stopError && <p className="text-[11px] font-semibold text-red-600">{stopError}</p>}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleStopRecurring}
+                  disabled={isBusy}
+                  className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-xs disabled:opacity-60"
+                >
+                  {pendingAction === 'stop' ? 'Stopping...' : 'Stop recurring'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStopOpen(false); setStopReason(''); setStopError(null); }}
+                  className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Handshake Notice Banner */}
           {handshakeNotice && (
